@@ -1,0 +1,5 @@
+.env
+rental_bot.db
+bot_debug.log
+bot_output.log
+models_debug.txt
