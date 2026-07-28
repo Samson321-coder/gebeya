@@ -253,7 +253,7 @@ HELP_MSG = (
     "• ክፍያ በወር 50 ብር ብቻ ነው\n\n"
     "<b>ማስታወቂያ ማስነገር ለምፈልጉ:</b>\n"
     "• በርካታ ተከታዮች ባሉት Sam Technologies የTelegram Channel ማስታወቂያ ማስነገር ከፈለጉ በ 0985605005 ይደዉሉ\n\n"
-    "<b>ተጨማሪ መረጃ</b>\n\n"
+    "<b>ተጨማሪ መረጃ</b>\n"
     "• t.me/meznagna_26 Telegram Channel ላይ ይመልከቱ\n\n"
     "<b>ለበለጠ መረጃ:</b>\n"
     "• 0985605005\n\n"
