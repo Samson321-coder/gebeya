@@ -1,8 +1,8 @@
-CITY_OPTIONS = ["አዲስ አበባ/አካባቢዋ", "ዲላ/አካባቢዋ"]
+CITY_OPTIONS = ["አዲስ አበባ/ዙሪያ", "ዲላ/አካባቢዋ"]
 
 # Neighborhoods per city
 NEIGHBORHOODS_BY_CITY = {
-    "አዲስ አበባ/አካባቢዋ": [
+    "አዲስ አበባ/ዙሪያ": [
         "ሁሉም",
         "አዲስ ከተማ",
         "አቃቂ ቃሊቲ",

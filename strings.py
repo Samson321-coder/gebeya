@@ -5,8 +5,8 @@ WELCOME_MSG = (
     "✨ <b>እንኳን በደህና መጡ!</b> ✨\n\n"
     "🏠 ይህ ቦት በኢትዮጵያ ሻጮችን፣ አከራዮችን፣ እና አገልግሎት ሰጪዎችን ከ ገዢዎች፣ ተከራዮች፣ እና አገልግሎት ፈላጊዎች ጋር በቀላሉ ያገናኛል።\n\n"
     "👇 <i>እባክዎን ከታች ካሉት አማራጮች አንዱን ይምረጡ፦</i>\n\n"
-    # "ተጨማሪ መረጃ t.me/meznagna_26 Telegram Channel ላይ ይመልከቱ።"
-)  
+    "ተጨማሪ መረጃ @akeray_tekeray_bot Telegram Channel ላይ ይመልከቱ።"
+)   
 
 # ── Channel subscription ──────────────────────────────────────────────────────
 SUBSCRIBE_PROMPT = (
@@ -253,11 +253,11 @@ HELP_MSG = (
     "• ክፍያ በወር 50 ብር ብቻ ነው\n\n"
     "<b>ማስታወቂያ ማስነገር ለምፈልጉ:</b>\n"
     "• በርካታ ተከታዮች ባሉት Sam Technologies የTelegram Channel ማስታወቂያ ማስነገር ከፈለጉ በ 0985605005 ይደዉሉ\n\n"
-    "<b>ተጨማሪ መረጃ</b>\n"
-    "• t.me/meznagna_26 Telegram Channel ላይ ይመልከቱ\n\n"
     "<b>ለበለጠ መረጃ:</b>\n"
     "• 0985605005\n\n"
     "<b>📌 ሌሎች ትዕዛዞች:</b>\n"
     "• /cancel - ወቅታዊ ክዋኔ ለማቋረጥ\n"
-    "• /help - ይህን ገጽ ለማሳየት"
+    "• /help - ይህን ገጽ ለማሳየት\n\n"
+    "<b>ተጨማሪ መረጃ</b>\n"
+    "• t.me/meznagna_26 Telegram Channel ላይ ይመልከቱ"
 )
