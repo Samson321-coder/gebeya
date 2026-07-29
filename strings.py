@@ -5,8 +5,8 @@ WELCOME_MSG = (
     "✨ <b>እንኳን በደህና መጡ!</b> ✨\n\n"
     "🏠 ይህ ቦት በኢትዮጵያ ሻጮችን፣ አከራዮችን፣ እና አገልግሎት ሰጪዎችን ከ ገዢዎች፣ ተከራዮች፣ እና አገልግሎት ፈላጊዎች ጋር በቀላሉ ያገናኛል።\n\n"
     "👇 <i>እባክዎን ከታች ካሉት አማራጮች አንዱን ይምረጡ፦</i>\n\n"
-    "ተጨማሪ መረጃ @akeray_tekeray_bot Telegram Channel ላይ ይመልከቱ።"
-)   
+    "ተጨማሪ መረጃ t.me/gebeya_mereja_26 Telegram Channel ላይ ይመልከቱ።" 
+)     
 
 # ── Channel subscription ──────────────────────────────────────────────────────
 SUBSCRIBE_PROMPT = (
@@ -259,5 +259,5 @@ HELP_MSG = (
     "• /cancel - ወቅታዊ ክዋኔ ለማቋረጥ\n"
     "• /help - ይህን ገጽ ለማሳየት\n\n"
     "<b>ተጨማሪ መረጃ</b>\n"
-    "• t.me/meznagna_26 Telegram Channel ላይ ይመልከቱ"
+    "• t.me/gebeya_mereja_26 Telegram Channel ላይ ይመልከቱ"
 )
