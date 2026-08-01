@@ -138,7 +138,13 @@ def get_listing_type_from_row(item):
 
 
 def get_property_purpose_from_row(item):
-    """Return the property purpose for a DB row, using the correct DB column."""
+    """Return the property purpose for a DB row, using the correct DB column.
+
+    DB schema column order:
+      0:id  1:owner_id  2:title  3:location  4:price  5:photo_file_id
+      6:contact_phone  7:property_purpose  8:created_at  9:status
+      10:fee_amount  11:transaction_id  12:last_checked_at  13:listing_type
+    """
     if item is None:
         return None
 
@@ -156,25 +162,55 @@ def get_property_purpose_from_row(item):
                 return value
 
     if isinstance(item, (list, tuple)):
-        for index in (7, 6, 8, 12, 13):
-            if len(item) > index and item[index]:
-                return item[index]
+        # property_purpose is at index 7 in the DB schema
+        if len(item) > 7 and item[7] in {"buy", "sell", "rent", "service"}:
+            return item[7]
     return None
 
 
 def get_listing_type_display_name(listing_type_val, property_purpose_val):
-    """Return the human-readable Amharic label for a listing type/purpose."""
+    """Return the human-readable Amharic label for a listing type/purpose.
+
+    For regular listings (property/service) we show what is offered.
+    For looking_for listings we show what the seeker is looking for.
+    """
+    if listing_type_val == 'looking_for':
+        if property_purpose_val == 'buy':
+            return 'ግዢ'
+        if property_purpose_val == 'rent':
+            return 'ኪራይ'
+        if property_purpose_val == 'service':
+            return 'አገልግሎት'
+        return 'ፍላጎት'
     if listing_type_val == 'service' or property_purpose_val == 'service':
         return 'አገልግሎት'
     if property_purpose_val == 'sell':
         return 'ሽያጭ'
     if property_purpose_val == 'rent':
         return 'ኪራይ'
-    if property_purpose_val == 'buy':
-        return 'ግዢ'
-    if listing_type_val == 'looking_for':
-        return 'ፍላጎት'
     return 'ያልታወቅ'
+
+
+def get_listing_title(listing_type_val, property_purpose_val):
+    """Return a purpose-specific title for regular listing postings."""
+    if listing_type_val == 'service' or property_purpose_val == 'service':
+        return 'አገልግሎት'
+    if property_purpose_val == 'sell':
+        return 'ለሽያጭ የቀረበ'
+    if property_purpose_val == 'rent':
+        return 'ለኪራይ የቀረበ'
+    return 'ዝርዝር'
+
+
+def get_looking_for_title(property_purpose_val):
+    """Return a purpose-specific title for looking-for postings."""
+    if property_purpose_val == 'buy':
+        return 'ፈላጊ — ለግዢ'
+    if property_purpose_val == 'rent':
+        return 'ፈላጊ — ለኪራይ'
+    if property_purpose_val == 'service':
+        return 'ፈላጊ — አገልግሎት'
+    return 'ፍላጎት — ተፈላጊ'
 
 
 def get_listing_status_from_row(item):
@@ -1152,8 +1188,10 @@ async def post_listing_to_channel(context, listing, listing_type_val, property_p
         return
 
     listing_type_am = get_listing_type_display_name(listing_type_val, property_purpose_val)
+    listing_type_title = get_listing_title(listing_type_val, property_purpose_val)
 
     text = strings.LISTING_TEMPLATE.format(
+        listing_type_title=listing_type_title,
         title=listing[2],
         location=listing[3],
         price=listing[4],
@@ -1253,6 +1291,7 @@ async def send_listing_page(update: Update, context: ContextTypes.DEFAULT_TYPE, 
             desc_val = "ያልተገለጸ"
 
         text = strings.LOOKING_FOR_LISTING_TEMPLATE.format(
+            looking_for_title=get_looking_for_title(property_purpose_val),
             category=category_val,
             purpose=purpose_am,
             city=city_part.strip(),
@@ -1264,8 +1303,10 @@ async def send_listing_page(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         ) + status_msg + page_indicator
     else:
         listing_type_am = get_listing_type_display_name(listing_type_val, property_purpose_val)
+        listing_type_title = get_listing_title(listing_type_val, property_purpose_val)
 
         text = strings.LISTING_TEMPLATE.format(
+            listing_type_title=listing_type_title,
             title=item[2],
             location=item[3],
             price=item[4],
@@ -1446,6 +1487,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         desc_part = listing[4] or ""  # price field stores description for looking_for
 
                         post_text = strings.LOOKING_FOR_CHANNEL_POST.format(
+                            looking_for_title=get_looking_for_title(property_purpose_val),
                             seeker=str(owner_id),
                             city=city_part.strip(),
                             neighborhood=neigh_part.strip(),

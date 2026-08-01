@@ -52,7 +52,7 @@ CATEGORY_VEHICLE = "🚗 ተሽከርካሪ"
 CATEGORY_FURNITURE = "🛋️ የቤት ፅቃ"
 CATEGORY_ELECTRONICS = "📱 ኤሌክትሮንክስ"
 CATEGORY_COSMETICS = "👗 ፋሽን/ዉበት"
-CATEGORY_OTHER = "📦 ሌሎች"
+CATEGORY_OTHER = "📦 ሌላ"
 # Service categories
 SERVICE_CATEGORY_HOUSE = "🔧 ቤት ነክ አገልግሎቶች"
 SERVICE_CATEGORY_VEHICLE = "🚗 ተሽከርካሪ ነክ አገልግሎቶች"
@@ -61,8 +61,8 @@ SERVICE_CATEGORY_COSMETICS = "👗 ፋሽን/ዉበት ነክ አገልግሎቶ
 SERVICE_CATEGORY_OTHER = "📦 ሌሎች አገልግሎቶች"
 
 OWNER_ASK_TYPE = 'እባክዎን ከሚከተሉት አማራጮች አንዱን ይምረጡ'
-LISTING_SERVICE = "ሻጭ/አከራይ"
-LISTING_PROPERTY = "አገልግሎት ሰጪ"
+LISTING_SERVICE = "አገልግሎት ሰጪ"
+LISTING_PROPERTY = "ሻጭ/አከራይ"
 
 OWNER_ASK_CITY = "ንብረቱ/አገልግሎቱ በየትኛው ከተማ ይገኛል? ከታች ካለው ዝርዝር ይምረጡ።"
 OWNER_ASK_LOCATION = "ሰፈሩ/አካባቢው የት ነው? ከታች ካለው ዝርዝር ይምረጡ።"
@@ -169,7 +169,8 @@ PURPOSE_SERVICE = "🛠️ አገልግሎት"
 
 # Listing Template
 LISTING_TEMPLATE = (
-    "🌟 <b>{title}</b>\n\n"
+    "🌟 <b>{listing_type_title}</b>\n\n"
+    "📋 ዝርዝር፦ <b>{title}</b>\n"
     "📌 አይነት፦ <b>{listing_type_am}</b>\n"
     "📍 ቦታ፦ <b>{location}</b>\n"
     "💰 ዋጋ፦ <b>{price} ብር</b>\n\n"
@@ -178,7 +179,7 @@ LISTING_TEMPLATE = (
 )
 
 LOOKING_FOR_LISTING_TEMPLATE = (
-    "🔎 <b>ፍላጎት — ተፈላጊ</b>\n\n"
+    "🔎 <b>{looking_for_title}</b>\n\n"
     "📂 ምድብ፦ <b>{category}</b>\n"
     "🛋️ ዓላማ፦ <b>{purpose}</b>\n"
     "📌 ከተማ፦ <b>{city}</b>\n"
@@ -190,7 +191,7 @@ LOOKING_FOR_LISTING_TEMPLATE = (
 )
 
 LOOKING_FOR_CHANNEL_POST = (
-    "🔎 <b>ፍላጎት — ተፈላጊ</b>\n\n"
+    "🔎 <b>{looking_for_title}</b>\n\n"
     "👤 ፈላጊ። {seeker}\n"
     "📌 ከተማ፦ {city}\n"
     "📍 ሰፈር፦ {neighborhood}\n"

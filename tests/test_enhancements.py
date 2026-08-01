@@ -342,5 +342,30 @@ class EnhancementTests(unittest.TestCase):
 
         asyncio.run(run_test())
 
+    def test_property_purpose_extraction_strictly_checks_index_7(self):
+        # Full DB row format:
+        # (id, owner_id, title, location, price, photo_file_id, contact_phone, property_purpose, created_at, status, fee_amount, transaction_id, last_checked_at, listing_type)
+        row_sell = (1, 100, "House", "City", "5000", None, "0911000000", "sell", "2026-01-01", "paid", 0, None, None, "property")
+        row_rent = (2, 100, "Apt", "City", "3000", None, "0911000000", "rent", "2026-01-01", "paid", 0, None, None, "property")
+        row_service = (3, 100, "Plumber", "City", "1000", None, "0911000000", "service", "2026-01-01", "paid", 0, None, None, "service")
+        row_none = (4, 100, "Unknown", "City", "1000", None, "0911000000", None, "2026-01-01", "paid", 0, None, None, "property")
+
+        self.assertEqual(main.get_property_purpose_from_row(row_sell), "sell")
+        self.assertEqual(main.get_property_purpose_from_row(row_rent), "rent")
+        self.assertEqual(main.get_property_purpose_from_row(row_service), "service")
+        # Ensure that when index 7 is None, contact_phone (0911000000) or date is NOT returned as purpose
+        self.assertIsNone(main.get_property_purpose_from_row(row_none))
+
+    def test_listing_titles_generation(self):
+        self.assertEqual(main.get_listing_title("property", "sell"), "ለሽያጭ የቀረበ")
+        self.assertEqual(main.get_listing_title("property", "rent"), "ለኪራይ የቀረበ")
+        self.assertEqual(main.get_listing_title("service", None), "አገልግሎት")
+
+        self.assertEqual(main.get_looking_for_title("buy"), "ፈላጊ — ለግዢ")
+        self.assertEqual(main.get_looking_for_title("rent"), "ፈላጊ — ለኪራይ")
+        self.assertEqual(main.get_looking_for_title("service"), "ፈላጊ — አገልግሎት")
+        self.assertEqual(main.get_looking_for_title(None), "ፍላጎት — ተፈላጊ")
+
 if __name__ == "__main__":
     unittest.main()
+
