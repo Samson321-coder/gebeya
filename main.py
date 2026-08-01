@@ -139,11 +139,42 @@ def get_listing_type_from_row(item):
 
 def get_property_purpose_from_row(item):
     """Return the property purpose for a DB row, using the correct DB column."""
-    if not isinstance(item, (list, tuple)):
+    if item is None:
         return None
-    if len(item) > 7 and item[7]:
-        return item[7]
+
+    if isinstance(item, dict):
+        for key in ("property_purpose", "purpose", "listing_purpose", "propertyPurpose"):
+            value = item.get(key)
+            if value:
+                return value
+        return None
+
+    if hasattr(item, "keys"):
+        for key in ("property_purpose", "purpose", "listing_purpose", "propertyPurpose"):
+            value = getattr(item, key, None)
+            if value:
+                return value
+
+    if isinstance(item, (list, tuple)):
+        for index in (7, 6, 8, 12, 13):
+            if len(item) > index and item[index]:
+                return item[index]
     return None
+
+
+def get_listing_type_display_name(listing_type_val, property_purpose_val):
+    """Return the human-readable Amharic label for a listing type/purpose."""
+    if listing_type_val == 'service' or property_purpose_val == 'service':
+        return 'አገልግሎት'
+    if property_purpose_val == 'sell':
+        return 'ሽያጭ'
+    if property_purpose_val == 'rent':
+        return 'ኪራይ'
+    if property_purpose_val == 'buy':
+        return 'ግዢ'
+    if listing_type_val == 'looking_for':
+        return 'ፍላጎት'
+    return 'ያልታወቅ'
 
 
 def get_listing_status_from_row(item):
@@ -190,7 +221,7 @@ def reset_conversation_state(context: ContextTypes.DEFAULT_TYPE) -> None:
         context.user_data.pop(key, None)
 
 
-def mark_admin_action_processed(context: ContextTypes.DEFAULT_TYPE, listing_id: int | str, action: str) -> bool:
+def mark_admin_action_processed(context, listing_id, action):
     """Prevent the same approve/reject callback from being processed twice."""
     bot_data = getattr(context, "bot_data", None)
     if bot_data is None:
@@ -1120,14 +1151,7 @@ async def post_listing_to_channel(context, listing, listing_type_val, property_p
     if not channel_id:
         return
 
-    if listing_type_val == 'service':
-        listing_type_am = "አገልግሎት"
-    elif property_purpose_val == 'sell':
-        listing_type_am = "ሽያጭ"
-    elif property_purpose_val == 'rent':
-        listing_type_am = "ኪራይ"
-    else:
-        listing_type_am = "ያልታወቀ"
+    listing_type_am = get_listing_type_display_name(listing_type_val, property_purpose_val)
 
     text = strings.LISTING_TEMPLATE.format(
         title=listing[2],
@@ -1239,14 +1263,7 @@ async def send_listing_page(update: Update, context: ContextTypes.DEFAULT_TYPE, 
             date=item[7] or "ያልተገለጸ"
         ) + status_msg + page_indicator
     else:
-        if listing_type_val == 'service':
-            listing_type_am = "አገልግሎት"
-        elif property_purpose_val == 'sell':
-            listing_type_am = "ሽያጭ"
-        elif property_purpose_val == 'rent':
-            listing_type_am = "ኪራይ"
-        else:
-            listing_type_am = "ያልታወቀ"
+        listing_type_am = get_listing_type_display_name(listing_type_val, property_purpose_val)
 
         text = strings.LISTING_TEMPLATE.format(
             title=item[2],
