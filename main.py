@@ -157,12 +157,59 @@ def get_listing_status_from_row(item):
     return None
 
 
+def _create_pending_submission(context, owner_id, title, location, price, photos_str, contact, fee_amount, listing_type, property_purpose):
+    """Create a pending submission record that is only promoted after admin approval."""
+    return database.add_listing(
+        owner_id,
+        title,
+        location,
+        price,
+        photos_str,
+        contact,
+        fee_amount=fee_amount,
+        listing_type=listing_type,
+        property_purpose=property_purpose,
+    )
+
+
 # ─── Start & Cancel ───────────────────────────────────────────────────────────
+
+def reset_conversation_state(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Clear draft and pagination state so a new flow starts cleanly."""
+    keys_to_clear = [
+        "title", "category", "city", "location", "neighborhood", "price", "photos",
+        "contact", "fee", "listing_id", "current_listings", "is_for_owner",
+        "listing_type", "sub_role", "seeker_listing_type", "seeker_property_purpose",
+        "seeker_category", "seeker_city", "seeker_neighborhood", "looking_for_city",
+        "looking_for_neighborhood", "looking_for_desc", "looking_for_price",
+        "looking_for_contact", "looking_for_listing_id", "looking_for_purpose",
+        "in_looking_for_post", "in_looking_for_search", "lf_search_city",
+        "lf_search_neighborhood", "last_media_group_ids",
+    ]
+    for key in keys_to_clear:
+        context.user_data.pop(key, None)
+
+
+def mark_admin_action_processed(context: ContextTypes.DEFAULT_TYPE, listing_id: int | str, action: str) -> bool:
+    """Prevent the same approve/reject callback from being processed twice."""
+    bot_data = getattr(context, "bot_data", None)
+    if bot_data is None:
+        bot_data = {}
+        context.bot_data = bot_data
+
+    processed_actions = bot_data.setdefault("processed_admin_actions", {})
+    key = f"{action}:{listing_id}"
+    if key in processed_actions:
+        return True
+    processed_actions[key] = True
+    return False
+
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print(f"Received start command from {update.effective_user.id}")
     user = update.effective_user
     database.add_user(user.id, user.username)
+    reset_conversation_state(context)
 
     if user.id in ADMIN_IDS:
         database.add_user(user.id, user.username, role='admin')
@@ -184,6 +231,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    reset_conversation_state(context)
     await update.message.reply_text(
         strings.CANCEL_MSG, reply_markup=ReplyKeyboardRemove()
     )
@@ -243,6 +291,7 @@ def parse_city_and_location(value: str):
 # ─── Owner Flow ───────────────────────────────────────────────────────────────
 
 async def owner_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    reset_conversation_state(context)
     role_text = update.message.text
     if role_text == strings.ROLE_SERVICE_PROVIDER:
         context.user_data["listing_type"] = 'service'
@@ -531,7 +580,8 @@ async def owner_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif sub == strings.ROLE_LANDLORD:
             property_purpose = 'rent'
 
-    listing_id = database.add_listing(
+    listing_id = _create_pending_submission(
+        context,
         user_id,
         context.user_data["title"],
         context.user_data["location"],
@@ -575,7 +625,15 @@ async def owner_submit_txid(update: Update, context: ContextTypes.DEFAULT_TYPE):
         txid = update.message.text
         display_txid = txid
 
-    listing_id = context.user_data["listing_id"]
+    listing_id = context.user_data.get("listing_id")
+    if not listing_id:
+        await update.message.reply_text(
+            "❌ የክፍያ ማረጋገጫ ማስተላለፍ አልተቻለም። እባክዎ እንደገና ይጀምሩ /start",
+            reply_markup=get_main_keyboard(),
+            parse_mode='HTML'
+        )
+        return CHOOSING_ROLE
+
     database.update_listing_txid(listing_id, txid)
 
     # Notify Admin
@@ -642,6 +700,7 @@ async def owner_submit_txid(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ─── Seeker Flow ──────────────────────────────────────────────────────────────
 
 async def seeker_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    reset_conversation_state(context)
     role_text = update.message.text
     if role_text == strings.ROLE_BUYER:
         context.user_data["seeker_listing_type"] = 'property'
@@ -873,12 +932,20 @@ async def owner_looking_for_date_filter(update: Update, context: ContextTypes.DE
 
 async def seeker_looking_for_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Seeker clicked 'Looking For' — skip purpose if already known."""
+    for key in [
+        "looking_for_desc", "looking_for_price", "looking_for_contact",
+        "looking_for_city", "looking_for_neighborhood", "looking_for_purpose",
+        "looking_for_listing_id", "seeker_category", "seeker_city",
+        "seeker_neighborhood", "current_listings", "is_for_owner",
+    ]:
+        context.user_data.pop(key, None)
+
     context.user_data["in_looking_for_post"] = True
     context.user_data["in_looking_for_search"] = False
-    
+
     listing_type = context.user_data.get("seeker_listing_type")
     prop_purpose = context.user_data.get("seeker_property_purpose")
-    
+
     if listing_type == 'service':
         context.user_data["looking_for_purpose"] = 'service'
     elif prop_purpose == 'sell':
@@ -887,7 +954,7 @@ async def seeker_looking_for_start(update: Update, context: ContextTypes.DEFAULT
         context.user_data["looking_for_purpose"] = 'rent'
     else:
         context.user_data["looking_for_purpose"] = None
-        
+
     return await seeker_ask_category(update, context)
 
 
@@ -941,13 +1008,14 @@ async def seeker_looking_for_contact(update: Update, context: ContextTypes.DEFAU
 
     # Store in DB as a 'looking_for' listing so admin can approve/reject
     # title stores: category + description, price stores: budget
-    listing_id = database.add_listing(
+    listing_id = _create_pending_submission(
+        context,
         user_id,
         title=f"🔎 ፈላጊ — {category} — {desc}",
         location=location,
         price=price,
-        photo_file_id=None,
-        contact_phone=contact,
+        photos_str=None,
+        contact=contact,
         fee_amount=strings.FIXED_FEE,
         listing_type='looking_for',
         property_purpose=context.user_data.get("looking_for_purpose"),
@@ -1317,6 +1385,9 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         listing_id = int(query.data.split("_")[1])
+        if mark_admin_action_processed(context, listing_id, "approve"):
+            return
+
         listing = database.get_listing_by_id(listing_id)
         if not listing:
             return
@@ -1413,6 +1484,8 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if update.effective_user.id not in ADMIN_IDS:
             return
         listing_id = query.data.split("_")[1]
+        if mark_admin_action_processed(context, listing_id, "reject"):
+            return
         listing = database.get_listing_by_id(listing_id)
         if listing:
             owner_id = listing[1]

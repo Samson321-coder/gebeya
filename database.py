@@ -305,6 +305,28 @@ def search_listings(query):
             or fuzzy_amharic_match(query, row[2] or '')]  # title column
 
 
+def _get_listing_type_value(row):
+    """Return the listing type from a DB row, supporting both current and older tuple shapes."""
+    if not row:
+        return None
+    if len(row) > 13 and row[13] in {"property", "service", "looking_for"}:
+        return row[13]
+    if len(row) > 12 and row[12] in {"property", "service", "looking_for"}:
+        return row[12]
+    return None
+
+
+def _get_property_purpose_value(row):
+    """Return the property purpose from a DB row, supporting both current and older tuple shapes."""
+    if not row:
+        return None
+    if len(row) > 7 and row[7] in {"buy", "sell", "rent", "service"}:
+        return row[7]
+    if len(row) > 6 and row[6] in {"buy", "sell", "rent", "service"}:
+        return row[6]
+    return None
+
+
 def search_listings_by_location(city_query, neighborhood_query=None, listing_type=None, property_purpose=None, category=None):
     """Search active listings by city and optional neighborhood, with optional type/purpose filters.
     
@@ -331,11 +353,9 @@ def search_listings_by_location(city_query, neighborhood_query=None, listing_typ
             results.append(row)
 
     if listing_type:
-        # NULL listing_type rows pass through (legacy records)
-        results = [r for r in results if len(r) <= 13 or not r[13] or r[13] == listing_type or r[12] == listing_type]
+        results = [r for r in results if _get_listing_type_value(r) in {None, listing_type}]
     if property_purpose:
-        # NULL property_purpose rows pass through (legacy records)
-        results = [r for r in results if len(r) <= 7 or not r[7] or r[7] == property_purpose]
+        results = [r for r in results if _get_property_purpose_value(r) in {None, property_purpose}]
     if category and category != "ሁሉም":
         results = [r for r in results if fuzzy_amharic_match(category, r[2] or '')]
     return results
@@ -352,11 +372,9 @@ def get_listings_by_city(city, listing_type=None, property_purpose=None, categor
     results = [row for row in all_listings
                if fuzzy_amharic_match(city, row[3] or '')]  # location column only
     if listing_type:
-        # NULL listing_type rows pass through (legacy records)
-        results = [r for r in results if len(r) <= 13 or not r[13] or r[13] == listing_type or r[12] == listing_type]
+        results = [r for r in results if _get_listing_type_value(r) in {None, listing_type}]
     if property_purpose:
-        # NULL property_purpose rows pass through (legacy records)
-        results = [r for r in results if len(r) <= 7 or not r[7] or r[7] == property_purpose]
+        results = [r for r in results if _get_property_purpose_value(r) in {None, property_purpose}]
     if category and category != "ሁሉም":
         results = [r for r in results if fuzzy_amharic_match(category, r[2] or '')]
     return results
@@ -387,9 +405,9 @@ def get_listings_by_owner(owner_id, listing_type=None, property_purpose=None):
     if not results:
         return []
     if listing_type:
-        results = [r for r in results if len(r) <= 13 or not r[13] or r[13] == listing_type or r[12] == listing_type]
+        results = [r for r in results if _get_listing_type_value(r) in {None, listing_type}]
     if property_purpose:
-        results = [r for r in results if len(r) <= 7 or not r[7] or r[7] == property_purpose]
+        results = [r for r in results if _get_property_purpose_value(r) in {None, property_purpose}]
     return results
 
 def delete_listing(listing_id):

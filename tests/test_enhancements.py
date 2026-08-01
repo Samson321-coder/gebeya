@@ -228,5 +228,119 @@ class EnhancementTests(unittest.TestCase):
 
         asyncio.run(run_test())
 
+    def test_owner_contact_stores_pending_submission_before_admin_approval(self):
+        async def run_test():
+            update = SimpleNamespace(
+                effective_user=SimpleNamespace(id=100),
+                message=SimpleNamespace(
+                    text="0911000000",
+                    contact=None,
+                    reply_text=AsyncMock(),
+                ),
+            )
+            context = SimpleNamespace(
+                user_data={
+                    "title": "Luxury Home",
+                    "location": "አዲስ አበባ - ቦሌ",
+                    "price": "5000",
+                    "contact": "0911000000",
+                    "listing_type": "property",
+                    "sub_role": strings.ROLE_LANDLORD,
+                    "photos": [],
+                },
+                bot=SimpleNamespace(),
+            )
+
+            with patch.object(main.database, "add_listing") as add_listing_mock, \
+                 patch.object(main, "_create_pending_submission", return_value="pending_123") as create_pending_mock:
+                await main.owner_contact(update, context)
+
+            add_listing_mock.assert_not_called()
+            create_pending_mock.assert_called_once()
+            self.assertEqual(context.user_data["listing_id"], "pending_123")
+
+        asyncio.run(run_test())
+
+    def test_reset_conversation_state_clears_stale_flow_data(self):
+        context = SimpleNamespace(user_data={
+            "title": "old",
+            "category": "cat",
+            "city": "city",
+            "location": "loc",
+            "price": "100",
+            "photos": ["img"],
+            "contact": "123",
+            "listing_id": 1,
+            "current_listings": [1],
+            "is_for_owner": True,
+            "seeker_listing_type": "property",
+            "seeker_property_purpose": "rent",
+            "looking_for_desc": "desc",
+        })
+
+        main.reset_conversation_state(context)
+
+        self.assertNotIn("title", context.user_data)
+        self.assertNotIn("category", context.user_data)
+        self.assertNotIn("current_listings", context.user_data)
+        self.assertNotIn("seeker_listing_type", context.user_data)
+        self.assertNotIn("looking_for_desc", context.user_data)
+
+    def test_owner_submit_txid_handles_missing_listing_id(self):
+        async def run_test():
+            update = SimpleNamespace(
+                effective_user=SimpleNamespace(id=100, username="owner"),
+                message=SimpleNamespace(
+                    text="123456",
+                    photo=None,
+                    reply_text=AsyncMock(),
+                ),
+            )
+            context = SimpleNamespace(user_data={}, bot=SimpleNamespace())
+
+            result = await main.owner_submit_txid(update, context)
+
+            self.assertEqual(result, main.CHOOSING_ROLE)
+            update.message.reply_text.assert_awaited_once()
+
+        asyncio.run(run_test())
+
+    def test_seeker_looking_for_start_clears_previous_draft_data(self):
+        async def run_test():
+            update = SimpleNamespace(
+                message=SimpleNamespace(text=strings.ROLE_RENTER),
+            )
+            context = SimpleNamespace(user_data={
+                "looking_for_desc": "old desc",
+                "looking_for_price": "1000",
+                "looking_for_contact": "123456",
+                "looking_for_city": "city",
+                "looking_for_neighborhood": "neigh",
+                "looking_for_purpose": "buy",
+                "in_looking_for_post": False,
+                "in_looking_for_search": True,
+                "seeker_listing_type": "property",
+                "seeker_property_purpose": "sell",
+            })
+
+            with patch.object(main, "seeker_ask_category", new=AsyncMock(return_value=main.SEEKER_CATEGORY)) as ask_category_mock:
+                result = await main.seeker_looking_for_start(update, context)
+
+            self.assertEqual(result, main.SEEKER_CATEGORY)
+            self.assertNotIn("looking_for_desc", context.user_data)
+            self.assertNotIn("looking_for_price", context.user_data)
+            self.assertNotIn("looking_for_contact", context.user_data)
+            self.assertNotIn("looking_for_city", context.user_data)
+            self.assertNotIn("looking_for_neighborhood", context.user_data)
+            self.assertNotIn("seeker_category", context.user_data)
+            self.assertNotIn("seeker_city", context.user_data)
+            self.assertNotIn("seeker_neighborhood", context.user_data)
+            self.assertEqual(context.user_data["looking_for_purpose"], "buy")
+            self.assertTrue(context.user_data["in_looking_for_post"])
+            self.assertFalse(context.user_data["in_looking_for_search"])
+            ask_category_mock.assert_awaited_once()
+
+        asyncio.run(run_test())
+
 if __name__ == "__main__":
     unittest.main()
