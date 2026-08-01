@@ -41,7 +41,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_IDS = [int(x.strip()) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip()]
 CHANNEL_ID = os.getenv("CHANNEL_ID")
 # Channel username for subscription check (without @)
-SUBSCRIPTION_CHANNEL = os.getenv("SUBSCRIPTION_CHANNEL", "meznagna_26")
+SUBSCRIPTION_CHANNEL = os.getenv("SUBSCRIPTION_CHANNEL", "gebeya_mereja_266")
 
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN environment variable is not set!")
@@ -66,11 +66,9 @@ if not BOT_TOKEN:
     SEEKER_LOOKING_FOR_CONTACT,
     LOOKING_FOR_PAYMENT,
     SEEKER_LOOKING_FOR_PURPOSE,
-    SEEKER_ALERT_CATEGORY,
-    SEEKER_ALERT_CITY,
-    SEEKER_ALERT_NEIGHBORHOOD,
     OWNER_LOOKING_FOR_DATE,
-) = range(22)
+    SEEKER_LOOKING_FOR_PRICE,
+) = range(20)
 
 
 # ─── Subscription Check ────────────────────────────────────────────────────────
@@ -109,6 +107,15 @@ def get_main_keyboard():
         [strings.HELP_BTN]
     ]
     return ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+
+
+def get_seeker_menu_keyboard():
+    keyboard = [
+        [strings.SEEKER_SEARCH],
+        [strings.SEEKER_LOOKING_FOR],
+        [strings.BACK],
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 
 def get_photo_keyboard():
@@ -225,8 +232,17 @@ async def owner_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def owner_view_looking_for(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["in_looking_for_search"] = True
     context.user_data["in_looking_for_post"] = False
-    context.user_data["seeker_listing_type"] = context.user_data.get("listing_type", "property")
-    context.user_data["seeker_property_purpose"] = None
+    # Map owner role to the corresponding looking-for purpose
+    context.user_data["seeker_listing_type"] = 'looking_for'
+    sub_role = context.user_data.get("sub_role", "")
+    if sub_role == strings.ROLE_SELLER:
+        context.user_data["seeker_property_purpose"] = 'buy'
+    elif sub_role == strings.ROLE_LANDLORD:
+        context.user_data["seeker_property_purpose"] = 'rent'
+    elif sub_role == strings.ROLE_SERVICE_PROVIDER:
+        context.user_data["seeker_property_purpose"] = 'service'
+    else:
+        context.user_data["seeker_property_purpose"] = None
     return await seeker_ask_category(update, context)
 
 
@@ -240,6 +256,7 @@ async def owner_add_new(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [strings.SERVICE_CATEGORY_VEHICLE],
             [strings.SERVICE_CATEGORY_ELECTRONICS],
             [strings.SERVICE_CATEGORY_COSMETICS],
+            [strings.SERVICE_CATEGORY_OTHER],
         ]
     else:
         categories = [
@@ -248,6 +265,7 @@ async def owner_add_new(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [strings.CATEGORY_FURNITURE],
             [strings.CATEGORY_ELECTRONICS],
             [strings.CATEGORY_COSMETICS],
+            [strings.CATEGORY_OTHER],
         ]
     categories.append([strings.CANCEL])
 
@@ -270,7 +288,15 @@ async def owner_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def owner_manage(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    listings = database.get_listings_by_owner(user_id)
+    listing_type = context.user_data.get("listing_type", "property")
+    sub_role = context.user_data.get("sub_role", "")
+    property_purpose = None
+    if listing_type == 'property':
+        if sub_role == strings.ROLE_SELLER:
+            property_purpose = 'sell'
+        elif sub_role == strings.ROLE_LANDLORD:
+            property_purpose = 'rent'
+    listings = database.get_listings_by_owner(user_id, listing_type=listing_type, property_purpose=property_purpose)
 
     if not listings:
         await update.message.reply_text(strings.OWNER_NO_LISTINGS)
@@ -281,38 +307,7 @@ async def owner_manage(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_listing_page(update, context, 0)
     return OWNER_MENU
 
-async def seeker_manage(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    listings = database.get_listings_by_owner(user_id)
 
-    if not listings:
-        await update.message.reply_text(strings.OWNER_NO_LISTINGS) # Reusing string
-        return SEEKER_MENU
-
-    context.user_data['current_listings'] = listings
-    context.user_data['is_for_owner'] = True
-    await send_listing_page(update, context, 0)
-    return SEEKER_MENU
-
-async def seeker_manage_alerts(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    alerts = database.get_alerts_by_user(user_id)
-    if not alerts:
-        await update.message.reply_text(strings.ALERT_LIST_EMPTY)
-        return SEEKER_MENU
-    
-    for alert in alerts:
-        a_id, a_tgid, a_cat, a_city, a_neigh, a_purp, a_date = alert
-        
-        purpose_am = {"buy": "ግዢ (Buy)", "rent": "ኪራይ (Rent)", "service": "አገልግሎት (Service)"}.get(a_purp or "", "ያልተገለጸ (Any)")
-        cat = a_cat or "ሁሉም (All)"
-        loc = f"{a_city or 'ሁሉም'} - {a_neigh or 'ሁሉም'}"
-        
-        text = strings.ALERT_LIST_ITEM.format(purpose=purpose_am, category=cat, location=loc, date=a_date)
-        keyboard = [[InlineKeyboardButton(strings.ALERT_DELETE_BTN, callback_data=f"deletealert_{a_id}")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await update.message.reply_text(text, parse_mode='HTML', reply_markup=reply_markup)
-    return SEEKER_MENU
 
 
 async def owner_title(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -630,27 +625,26 @@ async def seeker_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["seeker_listing_type"] = None
         context.user_data["seeker_property_purpose"] = None
 
-    keyboard = [
-        [strings.SEEKER_SEARCH],
-        [strings.SEEKER_LOOKING_FOR],
-        [strings.SEEKER_MANAGE],
-        [strings.SEEKER_CREATE_ALERT, strings.SEEKER_MANAGE_ALERTS],
-        [strings.BACK]
-    ]
     await update.message.reply_text(
-        strings.SEEKER_MENU_MSG, reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+        strings.SEEKER_MENU_MSG, reply_markup=get_seeker_menu_keyboard()
     )
     return SEEKER_MENU
 
 
 async def seeker_ask_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
     listing_type = context.user_data.get("seeker_listing_type", "property")
-    if listing_type == "service":
+    # When an owner views looking-for listings, listing_type is 'looking_for'
+    # Determine service vs property from the purpose
+    is_service = (listing_type == "service") or (
+        listing_type == "looking_for" and context.user_data.get("seeker_property_purpose") == "service"
+    )
+    if is_service:
         categories = [
             [strings.SERVICE_CATEGORY_HOUSE],
             [strings.SERVICE_CATEGORY_VEHICLE],
             [strings.SERVICE_CATEGORY_ELECTRONICS],
             [strings.SERVICE_CATEGORY_COSMETICS],
+            [strings.SERVICE_CATEGORY_OTHER],
             ["ሁሉም"]
         ]
     else:
@@ -660,6 +654,7 @@ async def seeker_ask_category(update: Update, context: ContextTypes.DEFAULT_TYPE
             [strings.CATEGORY_FURNITURE],
             [strings.CATEGORY_ELECTRONICS],
             [strings.CATEGORY_COSMETICS],
+            [strings.CATEGORY_OTHER],
             ["ሁሉም"]
         ]
     categories.append([strings.CANCEL])
@@ -866,73 +861,6 @@ async def seeker_looking_for_start(update: Update, context: ContextTypes.DEFAULT
 
 
 
-async def seeker_create_alert_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Start the Create Alert flow — ask for category."""
-    context.user_data["in_create_alert"] = True
-    listing_type = context.user_data.get("seeker_listing_type", "property")
-    if listing_type == "service":
-        categories = [
-            [strings.SERVICE_CATEGORY_HOUSE],
-            [strings.SERVICE_CATEGORY_VEHICLE],
-            [strings.SERVICE_CATEGORY_ELECTRONICS],
-            [strings.SERVICE_CATEGORY_COSMETICS],
-            ["ሁሉም"]
-        ]
-    else:
-        categories = [
-            [strings.CATEGORY_HOUSE],
-            [strings.CATEGORY_VEHICLE],
-            [strings.CATEGORY_FURNITURE],
-            [strings.CATEGORY_ELECTRONICS],
-            [strings.CATEGORY_COSMETICS],
-            ["ሁሉም"]
-        ]
-    categories.append([strings.CANCEL])
-    await update.message.reply_text(
-        strings.SEEKER_ASK_CATEGORY,
-        reply_markup=ReplyKeyboardMarkup(categories, resize_keyboard=True, one_time_keyboard=True)
-    )
-    return SEEKER_ALERT_CATEGORY
-
-async def seeker_alert_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
-    context.user_data["alert_category"] = text
-    keyboard = ReplyKeyboardMarkup(location_options.get_city_keyboard() + [["ሁሉም"]], resize_keyboard=True, one_time_keyboard=True)
-    await update.message.reply_text(strings.SEEKER_ASK_CITY, reply_markup=keyboard)
-    return SEEKER_ALERT_CITY
-
-async def seeker_alert_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
-    context.user_data["alert_city"] = text
-    if text == "ሁሉም":
-        # Skip neighborhood
-        telegram_id = update.effective_user.id
-        database.add_alert(
-            telegram_id=telegram_id,
-            category=context.user_data.get("alert_category", "ሁሉም"),
-            city="ሁሉም",
-            neighborhood="ሁሉም",
-            property_purpose=context.user_data.get("seeker_property_purpose")
-        )
-        await update.message.reply_text(strings.SEEKER_ALERT_CREATED, parse_mode='HTML', reply_markup=ReplyKeyboardMarkup([[strings.BACK]], resize_keyboard=True))
-        return SEEKER_MENU
-    neighborhood_keyboard = location_options.get_neighborhood_keyboard(text)
-    keyboard = ReplyKeyboardMarkup(neighborhood_keyboard + [["ሁሉም"]], resize_keyboard=True, one_time_keyboard=True)
-    await update.message.reply_text(strings.SEEKER_ASK_SEARCH, reply_markup=keyboard)
-    return SEEKER_ALERT_NEIGHBORHOOD
-
-async def seeker_alert_neighborhood(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
-    telegram_id = update.effective_user.id
-    database.add_alert(
-        telegram_id=telegram_id,
-        category=context.user_data.get("alert_category", "ሁሉም"),
-        city=context.user_data.get("alert_city", "ሁሉም"),
-        neighborhood=text,
-        property_purpose=context.user_data.get("seeker_property_purpose")
-    )
-    await update.message.reply_text(strings.SEEKER_ALERT_CREATED, parse_mode='HTML', reply_markup=ReplyKeyboardMarkup([[strings.BACK]], resize_keyboard=True))
-    return SEEKER_MENU
 
 
 async def seeker_looking_for_description(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -942,6 +870,21 @@ async def seeker_looking_for_description(update: Update, context: ContextTypes.D
         await update.message.reply_text(strings.SEEKER_ASK_LOOKING_FOR, parse_mode='HTML')
         return SEEKER_LOOKING_FOR_DESC
     context.user_data["looking_for_desc"] = desc
+    # Ask for price/budget separately
+    await update.message.reply_text(
+        strings.SEEKER_ASK_LOOKING_FOR_PRICE,
+        reply_markup=ReplyKeyboardMarkup([[strings.CANCEL]], resize_keyboard=True)
+    )
+    return SEEKER_LOOKING_FOR_PRICE
+
+
+async def seeker_looking_for_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Save the price/budget and ask for contact."""
+    price = update.message.text.strip()
+    if not price:
+        await update.message.reply_text(strings.SEEKER_ASK_LOOKING_FOR_PRICE)
+        return SEEKER_LOOKING_FOR_PRICE
+    context.user_data["looking_for_price"] = price
     await update.message.reply_text(
         strings.SEEKER_ASK_CONTACT_FOR_LOOKING,
         reply_markup=ReplyKeyboardMarkup([[strings.CANCEL]], resize_keyboard=True)
@@ -958,6 +901,7 @@ async def seeker_looking_for_contact(update: Update, context: ContextTypes.DEFAU
 
     user_id = update.effective_user.id
     desc = context.user_data.get("looking_for_desc", "")
+    price = context.user_data.get("looking_for_price", "")
     category = context.user_data.get("seeker_category") or "ሁሉም"
 
     city = context.user_data.get("looking_for_city", "")
@@ -965,11 +909,12 @@ async def seeker_looking_for_contact(update: Update, context: ContextTypes.DEFAU
     location = f"{city} - {neighborhood}" if neighborhood and neighborhood != "ሁሉም" else city
 
     # Store in DB as a 'looking_for' listing so admin can approve/reject
+    # title stores: category + description, price stores: budget
     listing_id = database.add_listing(
         user_id,
-        title=f"🔎 ፈላጊ — {category}",
+        title=f"🔎 ፈላጊ — {category} — {desc}",
         location=location,
-        price=desc,           # their budget/description goes in price field
+        price=price,
         photo_file_id=None,
         contact_phone=contact,
         fee_amount=strings.FIXED_FEE,
@@ -1087,6 +1032,9 @@ async def send_listing_page(update: Update, context: ContextTypes.DEFAULT_TYPE, 
 
     from telegram import InputMediaPhoto
 
+    listing_type_val = item[12] if len(item) > 12 and item[12] else 'property'
+    property_purpose_val = item[13] if len(item) > 13 and item[13] else None
+
     status_msg = ""
     if for_owner or is_admin:
         status_map = {
@@ -1107,26 +1055,56 @@ async def send_listing_page(update: Update, context: ContextTypes.DEFAULT_TYPE, 
 
     page_indicator = f"\n\n📄 {current_idx + 1}/{len(listings)}"
 
-    listing_type_val = item[12] if len(item) > 12 and item[12] else 'property'
-    property_purpose_val = item[13] if len(item) > 13 and item[13] else None
+    if listing_type_val == 'looking_for':
+        loc = item[3] or ""
+        if " - " in loc:
+            city_part, neigh_part = loc.split(" - ", 1)
+        else:
+            city_part, neigh_part = loc, "ሁሉም"
 
-    if listing_type_val == 'service':
-        listing_type_am = "አገልግሎት"
-    elif property_purpose_val == 'sell':
-        listing_type_am = "ሽያጭ"
-    elif property_purpose_val == 'rent':
-        listing_type_am = "ኪራይ"
+        purpose_map = {"buy": "ግዢ (Buy)", "rent": "ኪራይ (Rent)", "service": "አገልግሎት (Service)"}
+        purpose_am = purpose_map.get(property_purpose_val or "", property_purpose_val or "ያልተገለጸ")
+
+        title_raw = item[2] or ""
+        title_parts = title_raw.split(" — ")
+        if len(title_parts) >= 3:
+            category_val = title_parts[1]
+            desc_val = " — ".join(title_parts[2:])
+        elif len(title_parts) == 2:
+            category_val = title_parts[1]
+            desc_val = "ያልተገለጸ"
+        else:
+            category_val = title_raw
+            desc_val = "ያልተገለጸ"
+
+        text = strings.LOOKING_FOR_LISTING_TEMPLATE.format(
+            category=category_val,
+            purpose=purpose_am,
+            city=city_part.strip(),
+            neighborhood=neigh_part.strip(),
+            price=item[4] or "ያልተገለጸ",
+            description=desc_val,
+            contact=item[6] or "ያልተገለጸ",
+            date=item[7] or "ያልተገለጸ"
+        ) + status_msg + page_indicator
     else:
-        listing_type_am = "ያልታወቀ"
+        if listing_type_val == 'service':
+            listing_type_am = "አገልግሎት"
+        elif property_purpose_val == 'sell':
+            listing_type_am = "ሽያጭ"
+        elif property_purpose_val == 'rent':
+            listing_type_am = "ኪራይ"
+        else:
+            listing_type_am = "ያልታወቀ"
 
-    text = strings.LISTING_TEMPLATE.format(
-        title=item[2],
-        location=item[3],
-        price=item[4],
-        contact=item[6],
-        listing_type_am=listing_type_am,
-        date=item[7]
-    ) + status_msg + page_indicator
+        text = strings.LISTING_TEMPLATE.format(
+            title=item[2],
+            location=item[3],
+            price=item[4],
+            contact=item[6],
+            listing_type_am=listing_type_am,
+            date=item[7]
+        ) + status_msg + page_indicator
 
     nav_row = []
     if current_idx > 0:
@@ -1637,9 +1615,6 @@ def main():
             SEEKER_MENU: [
                 MessageHandler(filters.Text(strings.SEEKER_SEARCH), seeker_ask_category),
                 MessageHandler(filters.Text(strings.SEEKER_LOOKING_FOR), seeker_looking_for_start),
-                MessageHandler(filters.Text(strings.SEEKER_MANAGE), seeker_manage),
-                MessageHandler(filters.Text(strings.SEEKER_CREATE_ALERT), seeker_create_alert_start),
-                MessageHandler(filters.Text(strings.SEEKER_MANAGE_ALERTS), seeker_manage_alerts),
                 MessageHandler(filters.Text(strings.BACK), start),
                 CallbackQueryHandler(handle_callback),
             ],
@@ -1651,21 +1626,14 @@ def main():
             SEEKER_LOOKING_FOR_PURPOSE: [
                 MessageHandler(filters.ALL, seeker_looking_for_start)
             ],
-
-            SEEKER_ALERT_CATEGORY: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.Text(strings.CANCEL), seeker_alert_category)
-            ],
-            SEEKER_ALERT_CITY: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.Text(strings.CANCEL), seeker_alert_city)
-            ],
-            SEEKER_ALERT_NEIGHBORHOOD: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.Text(strings.CANCEL), seeker_alert_neighborhood)
-            ],
             OWNER_LOOKING_FOR_DATE: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.Text(strings.CANCEL), owner_looking_for_date_filter)
             ],
             SEEKER_LOOKING_FOR_DESC: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.Text(strings.CANCEL), seeker_looking_for_description)
+            ],
+            SEEKER_LOOKING_FOR_PRICE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.Text(strings.CANCEL), seeker_looking_for_price)
             ],
             SEEKER_LOOKING_FOR_CONTACT: [
                 MessageHandler((filters.TEXT | filters.CONTACT) & ~filters.COMMAND & ~filters.Text(strings.CANCEL), seeker_looking_for_contact)

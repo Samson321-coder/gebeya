@@ -22,12 +22,15 @@ This is a Telegram rental bot designed to run on deployment platforms like **Rai
 Whether deploying to **Railway** or **Hugging Face**, configure the following environment variables (Secrets):
 - `BOT_TOKEN`: Your Telegram Bot API token.
 - `ADMIN_IDS`: Comma-separated list of your Telegram User IDs.
-- `DATABASE_URL`: Your PostgreSQL connection string (optional, defaults to local SQLite).
-- `GEMINI_API_KEY`: Your Google AI Studio API key.
-- `BOT_UPDATE_MODE`: `webhook` (default) or `polling`. Production should use `webhook`.
-- `WEBHOOK_URL`: Required when `BOT_UPDATE_MODE=webhook`. Public URL of your app (e.g., `your-app.up.railway.app` or `https://user-space.hf.space`).
-  - *Note: The bot prepends `https://` if needed and appends `/{BOT_TOKEN}` as the webhook path.*
+- `BOT_UPDATE_MODE`: `webhook` (recommended for Railway) or `polling`.
+- `WEBHOOK_URL`: Optional on Railway if you enable a public domain; otherwise set it explicitly to your app URL.
 - `WEBHOOK_SECRET`: Optional Telegram webhook `secret_token`.
+- `DATABASE_URL`: Your PostgreSQL connection string (optional; SQLite is used by default).
+- `DB_ENGINE`: Set to `sqlite` or `postgres`.
+- `SQLITE_PATH`: Optional for SQLite, defaults to `rental_bot.db`.
+- `CHANNEL_ID`: Optional Telegram channel ID for posting.
+- `SUBSCRIPTION_CHANNEL`: Optional subscription channel username without `@`.
+- `PERSISTENCE_PATH`: Optional persistence file for conversation state.
 
 ### 3. Deploy to Railway (Recommended)
 - Connect your GitHub repository to Railway.
@@ -60,7 +63,7 @@ pip install -r requirements.txt
 
 # Run the bot
 python main.py
-```
+``` 
 
 ### Database Options for Local Dev
 **SQLite (default)**:

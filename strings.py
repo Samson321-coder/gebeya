@@ -12,15 +12,16 @@ WELCOME_MSG = (
 SUBSCRIBE_PROMPT = (
     # "📢 <b>እባክዎን ለቀጠናችን ቻናል ይጠቀሙ!</b>\n\n"
     "📢 <b>እባክዎን ቀጣዩን ቻናል ይጠቀሙ!</b>\n\n"
-    "ቦቱን ለመጠቀም <b>@meznagna_26</b> ቻናላችንን ይቀላቀሉ፣ ከዚያ ቀጥለው <b>✅ ተቀላቀልኩ</b> ን ይጫኑ።"
+    # "ቦቱን ለመጠቀም <b>@meznagna_26</b> ቻናላችንን ይቀላቀሉ፣ ከዚያ ቀጥለው <b>✅ ተቀላቀልኩ</b> ን ይጫኑ።"
+    "ቦቱን ለመጠቀም እንድሁም ዝርዝር መረጃ ለማግኘት <b>@gebeya_mereja_266</b> ቻናላችንን ይቀላቀሉ፣ ከዚያ ቀጥለው <b>✅ ተቀላቀልኩ</b> ን ይጫኑ።"
 )
 SUBSCRIBE_BTN = "✅ ተቀላቀልኩ — ቀጥል"
-SUBSCRIBE_CHANNEL_URL = "https://t.me/meznagna_26"
+SUBSCRIBE_CHANNEL_URL = "https://t.me/gebeya_mereja_266"  
 NOT_SUBSCRIBED_MSG = (
-    "❌ <b>ቻናሉን እስካልተቀላቀሉ ቦቱ አይሰራም።</b>\n\n"
-    "እባክዎን @meznagna_26 ቻናላችንን ይቀላቀሉ ከዚያ <b>✅ ተቀላቀልኩ</b> ን ይጫኑ።"
+    "❌ <b>ቻናሉን እስካልተቀላቀሉ ቦቱ አይሰራም።</b>\n\n" 
+    "እባክዎን @gebeya_mereja_266 ቻናላችንን ይቀላቀሉ ከዚያ <b>✅ ተቀላቀልኩ</b> ን ይጫኑ።"
 )
-SUBSCRIBED_OK = "✅ አመሰግናለሁ! አሁን ቦቱን መጠቀም ይችላሉ።"
+SUBSCRIBED_OK = "✅ እናመሰግናለን! አሁን ቦቱን መጠቀም ይችላሉ።"
 
 ROLE_OWNER = "ሻጭ/አከራይ/አገልግሎት ሰጪ"
 ROLE_SEEKER = "ተከራይ/ገዢ/አገልግሎት ፈላጊ"
@@ -51,11 +52,13 @@ CATEGORY_VEHICLE = "🚗 ተሽከርካሪ"
 CATEGORY_FURNITURE = "🛋️ የቤት ፅቃ"
 CATEGORY_ELECTRONICS = "📱 ኤሌክትሮንክስ"
 CATEGORY_COSMETICS = "👗 ፋሽን/ዉበት"
+CATEGORY_OTHER = "📦 ሌሎች"
 # Service categories
 SERVICE_CATEGORY_HOUSE = "🔧 ቤት ነክ አገልግሎቶች"
 SERVICE_CATEGORY_VEHICLE = "🚗 ተሽከርካሪ ነክ አገልግሎቶች"
 SERVICE_CATEGORY_ELECTRONICS = "📱 ኤሌክትሮንክስ ነክ አገልግሎቶች"
 SERVICE_CATEGORY_COSMETICS = "👗 ፋሽን/ዉበት ነክ አገልግሎቶች"
+SERVICE_CATEGORY_OTHER = "📦 ሌሎች አገልግሎቶች"
 
 OWNER_ASK_TYPE = 'እባክዎን ከሚከተሉት አማራጮች አንዱን ይምረጡ'
 LISTING_SERVICE = "ሻጭ/አከራይ"
@@ -112,9 +115,6 @@ SEEKER_MENU_MSG = "ምን ማድረግ ይፈልጋሉ?"
 SEEKER_SEARCH = "🔍 በከተማ, ሰፈር ፈልግ"
 # SEEKER_LOOKING_FOR = "🔎 እየፈለኩትን ይላኩ (Looking For)"
 SEEKER_LOOKING_FOR = "🔎 ፍላጎቶን ይላኩ"
-SEEKER_MANAGE = "📝 የኔን ፍላጎቶች አስተዳድር"
-SEEKER_CREATE_ALERT = "🔔 ማሳወቂያ ፍጠር"
-SEEKER_MANAGE_ALERTS = "🔕 ማሳወቂያዎችን ሰርዝ"
 SEEKER_VIEW_ALL = "ሁሉንም ዝርዝሮች እይ"
 SEEKER_ASK_CATEGORY = "📂 እባክዎን የሚፈልጉትን ምድብ ይምረጡ:"
 SEEKER_ASK_SEARCH = "የሚፈልጉትን ሰፈር ከታች ካለው ዝርዝር ይምረጡ።"
@@ -126,9 +126,10 @@ SEEKER_NO_MATCH = "በዚህ አካባቢ የተመዘገበ መረጃ አልተ
 SEEKER_ASK_LOOKING_FOR = (
     "🔎 <b>ፍላጎቶን ይግለጹ:</b>\n\n"
     "• ምን ዓይነት ንብረት/አገልግሎት እንደሚፈልጉ ይጻፉ\n"
-    "  (ለምሳሌ፦ «ባለ 2 ክፍል ቤት ቦሌ አካባቢ 5000 ብር ድረስ»)\n\n"
+    "  (ለምሳሌ፦ «ባለ 2 ክፍል ቤት ቦሌ አካባቢ»)\n\n"
     "ጥያቄዎ ለሻጮች/አከራዮች/አገልግሎት ሰጪዎች  የሚታይ ይሆናል።"
 )
+SEEKER_ASK_LOOKING_FOR_PRICE = "💰 የዋጋ ገደብዎን ይጻፉ (ለምሳሌ፦ 5000 ብር ድረስ ወይም 'ስምምነት')"
 SEEKER_LOOKING_FOR_SENT = (
     # "✅ <b>ጥያቄዎ ክፍያ ተቀብሏል!</b>\n\n"
     "✅ <b>ጥያቄዎ ደርሶናል!</b>\n\n"
@@ -144,9 +145,9 @@ SEEKER_LOOKING_FOR_ADMIN = (
     "🔍 <b>አዲስ «ፍላጎት» ጥያቄ — ክፍያ ተፈጽሟል!</b>\n\n"
     "ከ: {seeker}\n"
     "ምድብ: {category}\n"
-    "ከተማ (City): {city}\n"
-    "ሰፈር (Neighborhood): {neighborhood}\n"
-    "ዓላማ (Purpose): {purpose}\n"
+    "ከተማ: {city}\n"
+    "ሰፈር: {neighborhood}\n"
+    "ዓላማ: {purpose}\n"
     "ዝርዝር: {description}\n"
     "ስልክ: {contact}\n"
     "ክፍያ: 50 ብር (ቋሚ)\n"
@@ -166,19 +167,24 @@ PURPOSE_BUY = "🛒 ግዢ"
 PURPOSE_RENT = "🏠 ኪራይ"
 PURPOSE_SERVICE = "🛠️ አገልግሎት"
 
-SEEKER_ALERT_CREATED = "✅ <b>ማሳወቂያዎ ተፈጥሯል!</b>\n\nከምርጫዎ ጋር የሚስማማ አዲስ ነገር ሲገባ መልእክት እንልክልዎታለን።"
-ALERT_NOTIFICATION_MSG = "🔔 <b>አዲስ ማሳወቂያ!</b>\n\nየምትፈልጉት አይነት አዲስ ነገር ተለቋል:\n\n{title}\n\nወደ ዋናው ምናሌ በመሄድ መፈለግ ይችላሉ!"
-ALERT_LIST_EMPTY = "ምንም አይነት ማሳወቂያ የለዎትም።"
-ALERT_LIST_ITEM = "📌 <b>ዓላማ:</b> {purpose}\n📂 <b>ምድብ:</b> {category}\n📍 <b>ቦታ:</b> {location}\n📅 <b>የተፈጠረበት:</b> {date}"
-ALERT_DELETE_BTN = "❌ ሰርዝ"
-ALERT_DELETED_MSG = "✅ ማሳወቂያው በተሳካ ሁኔታ ተሰርዟል።"
-
 # Listing Template
 LISTING_TEMPLATE = (
     "🌟 <b>{title}</b>\n\n"
     "📌 አይነት፦ <b>{listing_type_am}</b>\n"
     "📍 ቦታ፦ <b>{location}</b>\n"
     "💰 ዋጋ፦ <b>{price} ብር</b>\n\n"
+    "📞 ስልክ፦ {contact}\n"
+    "📅 የተመዘገበበት፦ {date}"
+)
+
+LOOKING_FOR_LISTING_TEMPLATE = (
+    "🔎 <b>ፍላጎት — ተፈላጊ</b>\n\n"
+    "📂 ምድብ፦ <b>{category}</b>\n"
+    "🛋️ ዓላማ፦ <b>{purpose}</b>\n"
+    "📌 ከተማ፦ <b>{city}</b>\n"
+    "📍 ሰፈር፦ <b>{neighborhood}</b>\n"
+    "💰 ዋጋ፦ <b>{price}</b>\n\n"
+    "📝 መግለጫ፦\n{description}\n\n"
     "📞 ስልክ፦ {contact}\n"
     "📅 የተመዘገበበት፦ {date}"
 )

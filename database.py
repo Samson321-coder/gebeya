@@ -172,7 +172,8 @@ def init_db():
         city TEXT,
         neighborhood TEXT,
         property_purpose TEXT,
-        created_at TEXT
+        created_at TEXT,
+        description TEXT
     )
     ''', commit=True)
     
@@ -185,6 +186,8 @@ def init_db():
         execute_query("ALTER TABLE listings ADD COLUMN IF NOT EXISTS last_checked_at TEXT", commit=True)
         execute_query("ALTER TABLE listings ADD COLUMN IF NOT EXISTS listing_type TEXT DEFAULT 'property'", commit=True)
         execute_query("ALTER TABLE listings ADD COLUMN IF NOT EXISTS property_purpose TEXT", commit=True)
+        # Alerts migration
+        execute_query("ALTER TABLE alerts ADD COLUMN IF NOT EXISTS description TEXT", commit=True)
     else:
         # SQLite migration
         conn = _sqlite_connect()
@@ -204,6 +207,11 @@ def init_db():
                 cursor.execute("ALTER TABLE listings ADD COLUMN listing_type TEXT DEFAULT 'property'")
             if 'property_purpose' not in columns:
                 cursor.execute("ALTER TABLE listings ADD COLUMN property_purpose TEXT")
+            # Alerts migration
+            cursor.execute("PRAGMA table_info(alerts)")
+            alert_columns = [col[1] for col in cursor.fetchall()]
+            if 'description' not in alert_columns:
+                cursor.execute("ALTER TABLE alerts ADD COLUMN description TEXT")
             conn.commit()
         finally:
             conn.close()
@@ -324,10 +332,10 @@ def search_listings_by_location(city_query, neighborhood_query=None, listing_typ
 
     if listing_type:
         # NULL listing_type rows pass through (legacy records)
-        results = [r for r in results if not r[12] or r[12] == listing_type]
+        results = [r for r in results if len(r) <= 13 or not r[13] or r[13] == listing_type or r[12] == listing_type]
     if property_purpose:
         # NULL property_purpose rows pass through (legacy records)
-        results = [r for r in results if not r[13] or r[13] == property_purpose]
+        results = [r for r in results if len(r) <= 7 or not r[7] or r[7] == property_purpose]
     if category and category != "ሁሉም":
         results = [r for r in results if fuzzy_amharic_match(category, r[2] or '')]
     return results
@@ -345,10 +353,10 @@ def get_listings_by_city(city, listing_type=None, property_purpose=None, categor
                if fuzzy_amharic_match(city, row[3] or '')]  # location column only
     if listing_type:
         # NULL listing_type rows pass through (legacy records)
-        results = [r for r in results if not r[12] or r[12] == listing_type]
+        results = [r for r in results if len(r) <= 13 or not r[13] or r[13] == listing_type or r[12] == listing_type]
     if property_purpose:
         # NULL property_purpose rows pass through (legacy records)
-        results = [r for r in results if not r[13] or r[13] == property_purpose]
+        results = [r for r in results if len(r) <= 7 or not r[7] or r[7] == property_purpose]
     if category and category != "ሁሉም":
         results = [r for r in results if fuzzy_amharic_match(category, r[2] or '')]
     return results
@@ -374,8 +382,15 @@ def get_total_user_count():
     result = execute_query("SELECT COUNT(*) FROM users", fetchone=True)
     return result[0] if result else 0
 
-def get_listings_by_owner(owner_id):
-    return execute_query("SELECT * FROM listings WHERE owner_id = %s ORDER BY id DESC", (owner_id,), fetchall=True)
+def get_listings_by_owner(owner_id, listing_type=None, property_purpose=None):
+    results = execute_query("SELECT * FROM listings WHERE owner_id = %s ORDER BY id DESC", (owner_id,), fetchall=True)
+    if not results:
+        return []
+    if listing_type:
+        results = [r for r in results if len(r) <= 13 or not r[13] or r[13] == listing_type or r[12] == listing_type]
+    if property_purpose:
+        results = [r for r in results if len(r) <= 7 or not r[7] or r[7] == property_purpose]
+    return results
 
 def delete_listing(listing_id):
     execute_query('DELETE FROM listings WHERE id = %s', (listing_id,), commit=True)
@@ -415,16 +430,16 @@ def refresh_listing_date(listing_id):
 # ---------------------------------------------------------------------------
 # Alerts
 # ---------------------------------------------------------------------------
-def add_alert(telegram_id, category, city, neighborhood, property_purpose):
+def add_alert(telegram_id, category, city, neighborhood, property_purpose, description=None):
     is_postgres = use_postgres()
     created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     query = '''
-    INSERT INTO alerts (telegram_id, category, city, neighborhood, property_purpose, created_at)
-    VALUES (%s, %s, %s, %s, %s, %s)
+    INSERT INTO alerts (telegram_id, category, city, neighborhood, property_purpose, created_at, description)
+    VALUES (%s, %s, %s, %s, %s, %s, %s)
     '''
     if not is_postgres:
         query = query.replace("%s", "?")
-    execute_query(query, (telegram_id, category, city, neighborhood, property_purpose, created_at), commit=True)
+    execute_query(query, (telegram_id, category, city, neighborhood, property_purpose, created_at, description), commit=True)
 
 def get_matching_alerts(category, location, property_purpose):
     city, neighborhood = _split_location(location)

@@ -6,7 +6,7 @@ from location_options import CITY_OPTIONS, NEIGHBORHOOD_OPTIONS, build_location_
 
 class LocationOptionsTests(unittest.TestCase):
     def test_city_options_only_include_dilla(self):
-        self.assertEqual(CITY_OPTIONS, ["Dilla"])
+        self.assertEqual(CITY_OPTIONS, ["አዲስ አበባ/ዙሪያ", "ዲላ/አካባቢዋ"])
 
     def test_neighborhood_keyboard_is_available(self):
         self.assertGreater(len(NEIGHBORHOOD_OPTIONS), 0)
