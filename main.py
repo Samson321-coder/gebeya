@@ -127,23 +127,27 @@ def get_photo_keyboard():
 
 
 def get_listing_type_from_row(item):
-    """Return the listing_type for a DB row, supporting current and legacy tuple shapes."""
+    """Return the listing_type for a DB row, supporting both migrated and fresh schema variations.
+
+    - Migrated SQLite: index 12 = listing_type ('property', 'service', 'looking_for')
+    - Fresh schema:   index 13 = listing_type ('property', 'service', 'looking_for')
+    """
     if not isinstance(item, (list, tuple)):
         return "property"
-    if len(item) > 13 and item[13] in {"property", "service", "looking_for"}:
-        return item[13]
-    if len(item) > 12 and item[12] in {"property", "service", "looking_for"}:
-        return item[12]
+    for index in (12, 13, 14, 7, 8):
+        if len(item) > index and item[index] in {"property", "service", "looking_for"}:
+            return item[index]
+    for val in item:
+        if isinstance(val, str) and val in {"property", "service", "looking_for"}:
+            return val
     return "property"
 
 
 def get_property_purpose_from_row(item):
-    """Return the property purpose for a DB row, using the correct DB column.
+    """Return the property purpose for a DB row, supporting both migrated and fresh schema variations.
 
-    DB schema column order:
-      0:id  1:owner_id  2:title  3:location  4:price  5:photo_file_id
-      6:contact_phone  7:property_purpose  8:created_at  9:status
-      10:fee_amount  11:transaction_id  12:last_checked_at  13:listing_type
+    - Migrated SQLite: index 13 = property_purpose ('buy', 'sell', 'rent', 'service')
+    - Fresh schema:   index 7  = property_purpose ('buy', 'sell', 'rent', 'service')
     """
     if item is None:
         return None
@@ -151,24 +155,31 @@ def get_property_purpose_from_row(item):
     if isinstance(item, dict):
         for key in ("property_purpose", "purpose", "listing_purpose", "propertyPurpose"):
             value = item.get(key)
-            if value:
+            if value in {"buy", "sell", "rent", "service"}:
                 return value
         return None
 
     if hasattr(item, "keys"):
         for key in ("property_purpose", "purpose", "listing_purpose", "propertyPurpose"):
-            value = getattr(item, key, None)
-            if value:
-                return value
+            try:
+                value = item[key]
+                if value in {"buy", "sell", "rent", "service"}:
+                    return value
+            except Exception:
+                pass
 
     if isinstance(item, (list, tuple)):
-        # property_purpose is at index 7 in the DB schema
-        if len(item) > 7 and item[7] in {"buy", "sell", "rent", "service"}:
-            return item[7]
+        # Check index 13 (migrated SQLite) then index 7 (fresh schema)
+        for index in (13, 7, 6, 8, 12, 14):
+            if len(item) > index and item[index] in {"buy", "sell", "rent", "service"}:
+                return item[index]
+        for val in item:
+            if isinstance(val, str) and val in {"buy", "sell", "rent", "service"}:
+                return val
     return None
 
 
-def get_listing_type_display_name(listing_type_val, property_purpose_val):
+def get_listing_type_display_name(listing_type_val, property_purpose_val, title=None):
     """Return the human-readable Amharic label for a listing type/purpose.
 
     For regular listings (property/service) we show what is offered.
@@ -182,16 +193,28 @@ def get_listing_type_display_name(listing_type_val, property_purpose_val):
         if property_purpose_val == 'service':
             return 'አገልግሎት'
         return 'ፍላጎት'
+
     if listing_type_val == 'service' or property_purpose_val == 'service':
         return 'አገልግሎት'
     if property_purpose_val == 'sell':
         return 'ሽያጭ'
     if property_purpose_val == 'rent':
         return 'ኪራይ'
-    return 'ያልታወቅ'
+
+    # Intelligent fallback for old rows missing property_purpose:
+    if title:
+        title_str = str(title).lower()
+        if "ኪራይ" in title_str or "ተከራይ" in title_str:
+            return 'ኪራይ'
+        if "ሽያጭ" in title_str or "ተሸጫ" in title_str or "ኮንዶሚኒየም" in title_str or "ቤት" in title_str:
+            return 'ሽያጭ'
+        if "አገልግሎት" in title_str:
+            return 'አገልግሎት'
+
+    return 'ሽያጭ/ኪራይ' if listing_type_val == 'property' else 'አገልግሎት'
 
 
-def get_listing_title(listing_type_val, property_purpose_val):
+def get_listing_title(listing_type_val, property_purpose_val, title=None):
     """Return a purpose-specific title for regular listing postings."""
     if listing_type_val == 'service' or property_purpose_val == 'service':
         return 'አገልግሎት'
@@ -199,7 +222,15 @@ def get_listing_title(listing_type_val, property_purpose_val):
         return 'ለሽያጭ የቀረበ'
     if property_purpose_val == 'rent':
         return 'ለኪራይ የቀረበ'
-    return 'ዝርዝር'
+
+    if title:
+        title_str = str(title).lower()
+        if "ኪራይ" in title_str or "ተከራይ" in title_str:
+            return 'ለኪራይ የቀረበ'
+        if "ሽያጭ" in title_str or "ተሸጫ" in title_str:
+            return 'ለሽያጭ የቀረበ'
+
+    return 'ለሽያጭ/ለኪራይ የቀረበ'
 
 
 def get_looking_for_title(property_purpose_val):
@@ -214,13 +245,15 @@ def get_looking_for_title(property_purpose_val):
 
 
 def get_listing_status_from_row(item):
-    """Return the listing status from a DB row, supporting current and legacy tuple shapes."""
+    """Return the listing status from a DB row, supporting all schema variations."""
     if not isinstance(item, (list, tuple)):
         return None
-    if len(item) > 9 and item[9]:
-        return item[9]
-    if len(item) > 8 and item[8] in {"pending", "paid", "rented", "expired"}:
-        return item[8]
+    for index in (8, 9, 7, 10):
+        if len(item) > index and item[index] in {"pending", "paid", "rented", "expired"}:
+            return item[index]
+    for val in item:
+        if isinstance(val, str) and val in {"pending", "paid", "rented", "expired"}:
+            return val
     return None
 
 
@@ -1187,8 +1220,8 @@ async def post_listing_to_channel(context, listing, listing_type_val, property_p
     if not channel_id:
         return
 
-    listing_type_am = get_listing_type_display_name(listing_type_val, property_purpose_val)
-    listing_type_title = get_listing_title(listing_type_val, property_purpose_val)
+    listing_type_am = get_listing_type_display_name(listing_type_val, property_purpose_val, listing[2] if len(listing) > 2 else None)
+    listing_type_title = get_listing_title(listing_type_val, property_purpose_val, listing[2] if len(listing) > 2 else None)
 
     text = strings.LISTING_TEMPLATE.format(
         listing_type_title=listing_type_title,
@@ -1302,8 +1335,8 @@ async def send_listing_page(update: Update, context: ContextTypes.DEFAULT_TYPE, 
             date=item[7] or "ያልተገለጸ"
         ) + status_msg + page_indicator
     else:
-        listing_type_am = get_listing_type_display_name(listing_type_val, property_purpose_val)
-        listing_type_title = get_listing_title(listing_type_val, property_purpose_val)
+        listing_type_am = get_listing_type_display_name(listing_type_val, property_purpose_val, item[2] if len(item) > 2 else None)
+        listing_type_title = get_listing_title(listing_type_val, property_purpose_val, item[2] if len(item) > 2 else None)
 
         text = strings.LISTING_TEMPLATE.format(
             listing_type_title=listing_type_title,

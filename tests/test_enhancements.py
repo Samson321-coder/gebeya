@@ -23,8 +23,22 @@ class EnhancementTests(unittest.TestCase):
             os.remove("test_rental_bot.db")
 
     def test_strings_categories(self):
-        self.assertEqual(strings.CATEGORY_OTHER, "📦 ሌሎች")
+        self.assertEqual(strings.CATEGORY_OTHER, "📦 ሌላ")
         self.assertEqual(strings.SERVICE_CATEGORY_OTHER, "📦 ሌሎች አገልግሎቶች")
+
+    def test_property_purpose_extraction_supports_fresh_and_migrated_schemas(self):
+        # Fresh schema row format (purpose at index 7):
+        row_sell_fresh = (1, 100, "House", "City", "5000", None, "0911000000", "sell", "2026-01-01", "paid", 0, None, None, "property")
+        # Migrated SQLite schema row format (purpose at index 13, created_at at index 7):
+        row_rent_migrated = (2, 100, "Apt", "City", "3000", None, "0911000000", "2026-01-01", "paid", 0, None, None, "property", "rent")
+        row_service_migrated = (3, 100, "Plumber", "City", "1000", None, "0911000000", "2026-01-01", "paid", 0, None, None, "service", "service")
+        row_none = (4, 100, "Unknown", "City", "1000", None, "0911000000", "2026-01-01", "paid", 0, None, None, "property", None)
+
+        self.assertEqual(main.get_property_purpose_from_row(row_sell_fresh), "sell")
+        self.assertEqual(main.get_property_purpose_from_row(row_rent_migrated), "rent")
+        self.assertEqual(main.get_property_purpose_from_row(row_service_migrated), "service")
+        # Ensure that when purpose is None, contact_phone or date is NOT returned as purpose
+        self.assertIsNone(main.get_property_purpose_from_row(row_none))
 
     def test_alerts_with_description(self):
         database.add_alert(

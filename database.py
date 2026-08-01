@@ -306,24 +306,36 @@ def search_listings(query):
 
 
 def _get_listing_type_value(row):
-    """Return the listing type from a DB row, supporting both current and older tuple shapes."""
+    """Return the listing type from a DB row, supporting both migrated and fresh schema variations.
+
+    - Migrated SQLite: index 12 = listing_type ('property', 'service', 'looking_for')
+    - Fresh schema:   index 13 = listing_type ('property', 'service', 'looking_for')
+    """
     if not row:
         return None
-    if len(row) > 13 and row[13] in {"property", "service", "looking_for"}:
-        return row[13]
-    if len(row) > 12 and row[12] in {"property", "service", "looking_for"}:
-        return row[12]
+    for index in (12, 13, 14, 7, 8):
+        if len(row) > index and row[index] in {"property", "service", "looking_for"}:
+            return row[index]
+    for val in row:
+        if isinstance(val, str) and val in {"property", "service", "looking_for"}:
+            return val
     return None
 
 
 def _get_property_purpose_value(row):
-    """Return the property purpose from a DB row, supporting both current and older tuple shapes."""
+    """Return the property purpose from a DB row, supporting both migrated and fresh schema variations.
+
+    - Migrated SQLite: index 13 = property_purpose ('buy', 'sell', 'rent', 'service')
+    - Fresh schema:   index 7  = property_purpose ('buy', 'sell', 'rent', 'service')
+    """
     if not row:
         return None
-    if len(row) > 7 and row[7] in {"buy", "sell", "rent", "service"}:
-        return row[7]
-    if len(row) > 6 and row[6] in {"buy", "sell", "rent", "service"}:
-        return row[6]
+    for index in (13, 7, 6, 8, 12, 14):
+        if len(row) > index and row[index] in {"buy", "sell", "rent", "service"}:
+            return row[index]
+    for val in row:
+        if isinstance(val, str) and val in {"buy", "sell", "rent", "service"}:
+            return val
     return None
 
 
