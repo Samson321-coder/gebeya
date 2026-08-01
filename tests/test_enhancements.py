@@ -2,7 +2,7 @@ import asyncio
 import os
 import unittest
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 os.environ.setdefault("BOT_TOKEN", "dummy-token")
 
@@ -109,6 +109,122 @@ class EnhancementTests(unittest.TestCase):
             await main.send_listing_page(update, context, 0)
 
             bot.send_message.assert_called_once()
+
+        asyncio.run(run_test())
+
+    def test_send_listing_page_renders_rent_purpose_from_correct_column(self):
+        async def run_test():
+            listing = (
+                1,
+                100,
+                "Luxury Home",
+                "አዲስ አበባ - ቦሌ",
+                "5000",
+                None,
+                "0911000000",
+                "rent",
+                "2026-01-01 12:00:00",
+                "paid",
+                0,
+                None,
+                None,
+                "property",
+            )
+            update = SimpleNamespace(
+                effective_user=SimpleNamespace(id=100),
+                effective_chat=SimpleNamespace(id=200),
+            )
+            bot = SimpleNamespace(
+                send_photo=AsyncMock(),
+                send_message=AsyncMock(),
+                send_media_group=AsyncMock(),
+            )
+            context = SimpleNamespace(
+                user_data={"current_listings": [listing], "is_for_owner": False},
+                bot=bot,
+            )
+
+            await main.send_listing_page(update, context, 0)
+
+            sent_text = bot.send_message.await_args.kwargs["text"]
+            self.assertIn("ኪራይ", sent_text)
+
+        asyncio.run(run_test())
+
+    def test_post_listing_to_channel_does_not_send_duplicate_text_for_multi_photo(self):
+        async def run_test():
+            bot = SimpleNamespace(
+                send_media_group=AsyncMock(return_value=[SimpleNamespace(message_id=1)]),
+                send_photo=AsyncMock(),
+                send_message=AsyncMock(),
+                get_me=AsyncMock(return_value=SimpleNamespace(username="demo_bot")),
+            )
+            context = SimpleNamespace(bot=bot)
+            listing = (
+                1,
+                100,
+                "Luxury Home",
+                "አዲስ አበባ - ቦሌ",
+                "5000",
+                "photo1,photo2",
+                "0911000000",
+                "rent",
+                "2026-01-01 12:00:00",
+                "paid",
+                0,
+                None,
+                None,
+                "property",
+            )
+
+            await main.post_listing_to_channel(context, listing, "property", "rent", channel_id="channel")
+
+            bot.send_media_group.assert_awaited_once()
+            bot.send_message.assert_not_awaited()
+
+        asyncio.run(run_test())
+
+    def test_approve_callback_skips_duplicate_owner_notification_for_paid_listing(self):
+        async def run_test():
+            query = SimpleNamespace(
+                data="approve_1",
+                answer=AsyncMock(),
+                edit_message_text=AsyncMock(),
+                message=SimpleNamespace(text="pending", photo=None),
+            )
+            update = SimpleNamespace(
+                callback_query=query,
+                effective_user=SimpleNamespace(id=1),
+                effective_chat=SimpleNamespace(id=2),
+            )
+            bot = SimpleNamespace(send_message=AsyncMock(), send_photo=AsyncMock(), send_media_group=AsyncMock())
+            context = SimpleNamespace(bot=bot, user_data={})
+
+            listing = (
+                1,
+                100,
+                "Luxury Home",
+                "አዲስ አበባ - ቦሌ",
+                "5000",
+                None,
+                "0911000000",
+                "rent",
+                "2026-01-01 12:00:00",
+                "paid",
+                0,
+                None,
+                None,
+                "property",
+            )
+
+            with patch.object(main.database, "approve_listing") as approve_mock, \
+                 patch.object(main.database, "get_listing_by_id", return_value=listing), \
+                 patch.object(main.database, "get_matching_alerts", return_value=[]), \
+                 patch.object(main, "post_listing_to_channel", new=AsyncMock()):
+                await main.handle_callback(update, context)
+
+            bot.send_message.assert_not_called()
+            approve_mock.assert_not_called()
 
         asyncio.run(run_test())
 

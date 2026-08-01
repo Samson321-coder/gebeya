@@ -126,6 +126,37 @@ def get_photo_keyboard():
     )
 
 
+def get_listing_type_from_row(item):
+    """Return the listing_type for a DB row, supporting current and legacy tuple shapes."""
+    if not isinstance(item, (list, tuple)):
+        return "property"
+    if len(item) > 13 and item[13] in {"property", "service", "looking_for"}:
+        return item[13]
+    if len(item) > 12 and item[12] in {"property", "service", "looking_for"}:
+        return item[12]
+    return "property"
+
+
+def get_property_purpose_from_row(item):
+    """Return the property purpose for a DB row, using the correct DB column."""
+    if not isinstance(item, (list, tuple)):
+        return None
+    if len(item) > 7 and item[7]:
+        return item[7]
+    return None
+
+
+def get_listing_status_from_row(item):
+    """Return the listing status from a DB row, supporting current and legacy tuple shapes."""
+    if not isinstance(item, (list, tuple)):
+        return None
+    if len(item) > 9 and item[9]:
+        return item[9]
+    if len(item) > 8 and item[8] in {"pending", "paid", "rented", "expired"}:
+        return item[8]
+    return None
+
+
 # ─── Start & Cancel ───────────────────────────────────────────────────────────
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1013,6 +1044,57 @@ async def seeker_looking_for_txid(update: Update, context: ContextTypes.DEFAULT_
 
 # ─── Listing Display ──────────────────────────────────────────────────────────
 
+async def post_listing_to_channel(context, listing, listing_type_val, property_purpose_val, channel_id=None):
+    """Post a normal listing to the channel once, without sending duplicate follow-up messages."""
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
+
+    channel_id = channel_id or CHANNEL_ID
+    if not channel_id:
+        return
+
+    if listing_type_val == 'service':
+        listing_type_am = "አገልግሎት"
+    elif property_purpose_val == 'sell':
+        listing_type_am = "ሽያጭ"
+    elif property_purpose_val == 'rent':
+        listing_type_am = "ኪራይ"
+    else:
+        listing_type_am = "ያልታወቀ"
+
+    text = strings.LISTING_TEMPLATE.format(
+        title=listing[2],
+        location=listing[3],
+        price=listing[4],
+        contact=listing[6],
+        listing_type_am=listing_type_am,
+        date=listing[7],
+    )
+
+    bot_username = (await context.bot.get_me()).username
+    bot_link = f"https://t.me/{bot_username}"
+    view_text = f"\n\n🔗 ወደ ቦቱ ለመግባት: {bot_link}"
+
+    if listing[5]:
+        photo_ids = listing[5].split(",") if listing[5] else []
+    else:
+        photo_ids = []
+
+    if len(photo_ids) > 1:
+        media = [InputMediaPhoto(media=photo_ids[0], caption=text + view_text, parse_mode='HTML')]
+        for pid in photo_ids[1:]:
+            media.append(InputMediaPhoto(media=pid))
+        await context.bot.send_media_group(chat_id=channel_id, media=media)
+        return
+
+    channel_keyboard = [[InlineKeyboardButton("ወደ ቦቱ ይግቡ (View in Bot)", url=bot_link)]]
+    channel_reply_markup = InlineKeyboardMarkup(channel_keyboard)
+
+    if len(photo_ids) == 1:
+        await context.bot.send_photo(chat_id=channel_id, photo=photo_ids[0], caption=text + view_text, parse_mode='HTML', reply_markup=channel_reply_markup)
+    else:
+        await context.bot.send_message(chat_id=channel_id, text=text + view_text, parse_mode='HTML', reply_markup=channel_reply_markup)
+
+
 async def send_listing_page(update: Update, context: ContextTypes.DEFAULT_TYPE, current_idx: int):
     listings = context.user_data.get('current_listings', [])
 
@@ -1032,8 +1114,8 @@ async def send_listing_page(update: Update, context: ContextTypes.DEFAULT_TYPE, 
 
     from telegram import InputMediaPhoto
 
-    listing_type_val = item[12] if len(item) > 12 and item[12] else 'property'
-    property_purpose_val = item[13] if len(item) > 13 and item[13] else None
+    listing_type_val = get_listing_type_from_row(item)
+    property_purpose_val = get_property_purpose_from_row(item)
 
     status_msg = ""
     if for_owner or is_admin:
@@ -1043,7 +1125,8 @@ async def send_listing_page(update: Update, context: ContextTypes.DEFAULT_TYPE, 
             'rented': '🔒 Unlisted',
             'expired': '⏳ Expired',
         }
-        status_text = status_map.get(item[8], item[8]) if len(item) > 8 else "Unknown"
+        status_value = get_listing_status_from_row(item)
+        status_text = status_map.get(status_value, status_value or "Unknown")
 
         tx_val = item[10] if len(item) > 10 and item[10] else ""
         if tx_val.startswith("photo:"):
@@ -1120,7 +1203,7 @@ async def send_listing_page(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         keyboard.append([InlineKeyboardButton(strings.ADMIN_DELETE, callback_data=f"delete_{item[0]}")])
 
     if for_owner:
-        listing_type = item[12] if len(item) > 12 else 'property'
+        listing_type = get_listing_type_from_row(item)
         if item[8] == 'expired' and listing_type == 'service':
             keyboard.append([InlineKeyboardButton(strings.OWNER_RENEW_BTN, callback_data=f"renew_{item[0]}")])
         elif item[8] != 'rented':
@@ -1234,12 +1317,24 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         listing_id = int(query.data.split("_")[1])
+        listing = database.get_listing_by_id(listing_id)
+        if not listing:
+            return
+
+        current_status = get_listing_status_from_row(listing)
+        if current_status == 'paid':
+            try:
+                await query.edit_message_text(text=f"{query.message.text}\n\n✅ {strings.ADMIN_APPROVE_CONFIRM}")
+            except Exception:
+                pass
+            return
+
         database.approve_listing(listing_id)
 
         listing = database.get_listing_by_id(listing_id)
         if listing:
             owner_id = listing[1]
-            listing_type_val = listing[12] if len(listing) > 12 and listing[12] else 'property'
+            listing_type_val = get_listing_type_from_row(listing)
 
             if listing_type_val == 'looking_for':
                 try:
@@ -1250,7 +1345,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if CHANNEL_ID:
                     try:
                         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-                        property_purpose_val = listing[13] if len(listing) > 13 and listing[13] else None
+                        property_purpose_val = get_property_purpose_from_row(listing)
                         purpose_am = {"buy": "ግዢ (Buy)", "rent": "ኪራይ (Rent)", "service": "አገልግሎት (Service)"}.get(property_purpose_val or "", "ያልተገለጸ")
 
                         # listing[2] = title (we used title as description for looking_for)
@@ -1288,45 +1383,8 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 if CHANNEL_ID:
                     try:
-                        from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
-
-                        property_purpose_val = listing[13] if len(listing) > 13 and listing[13] else None
-
-                        if listing_type_val == 'service':
-                            listing_type_am = "አገልግሎት"
-                        elif property_purpose_val == 'sell':
-                            listing_type_am = "ሽያጭ"
-                        elif property_purpose_val == 'rent':
-                            listing_type_am = "ኪራይ"
-                        else:
-                            listing_type_am = "ያልታወቀ"
-
-                        text = strings.LISTING_TEMPLATE.format(
-                            title=listing[2],
-                            location=listing[3],
-                            price=listing[4],
-                            contact=listing[6],
-                            listing_type_am=listing_type_am,
-                            date=listing[7]
-                        )
-
-                        bot_username = (await context.bot.get_me()).username
-                        bot_link = f"https://t.me/{bot_username}"
-                        channel_keyboard = [[InlineKeyboardButton("ወደ ቦቱ ይግቡ (View in Bot)", url=bot_link)]]
-                        channel_reply_markup = InlineKeyboardMarkup(channel_keyboard)
-
-                        photo_ids = listing[5].split(",") if listing[5] else []
-
-                        if len(photo_ids) > 1:
-                            media = [InputMediaPhoto(media=photo_ids[0], caption=text, parse_mode='HTML')]
-                            for pid in photo_ids[1:]:
-                                media.append(InputMediaPhoto(media=pid))
-                            await context.bot.send_media_group(chat_id=CHANNEL_ID, media=media)
-                            await context.bot.send_message(chat_id=CHANNEL_ID, text="በቦቱ ላይ ለማየት (To view in bot):", reply_markup=channel_reply_markup)
-                        elif len(photo_ids) == 1:
-                            await context.bot.send_photo(chat_id=CHANNEL_ID, photo=photo_ids[0], caption=text, parse_mode='HTML', reply_markup=channel_reply_markup)
-                        else:
-                            await context.bot.send_message(chat_id=CHANNEL_ID, text=text, parse_mode='HTML', reply_markup=channel_reply_markup)
+                        property_purpose_val = get_property_purpose_from_row(listing)
+                        await post_listing_to_channel(context, listing, listing_type_val, property_purpose_val, channel_id=CHANNEL_ID)
 
                         # Fire search alerts
                         alert_users = database.get_matching_alerts(
