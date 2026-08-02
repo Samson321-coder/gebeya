@@ -148,6 +148,7 @@ SEEKER_LOOKING_FOR_ADMIN = (
     "ከተማ: {city}\n"
     "ሰፈር: {neighborhood}\n"
     "ዓላማ: {purpose}\n"
+    "💰 ዋጋ: {price}\n"
     "ዝርዝር: {description}\n"
     "ስልክ: {contact}\n"
     "ክፍያ: 50 ብር (ቋሚ)\n"

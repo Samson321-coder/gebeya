@@ -1172,6 +1172,7 @@ async def seeker_looking_for_txid(update: Update, context: ContextTypes.DEFAULT_
         city=context.user_data.get("looking_for_city", "አልተገለጸም"),
         neighborhood=context.user_data.get("looking_for_neighborhood", "አልተገለጸም"),
         purpose=purpose_am,
+        price=context.user_data.get("looking_for_price", "ያልተገለጸም"),
         description=desc,
         contact=contact,
         txid=display_txid,
