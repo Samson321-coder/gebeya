@@ -269,7 +269,23 @@ def renew_listing(listing_id):
 
 def approve_listing(listing_id):
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    execute_query('UPDATE listings SET status = %s, created_at = %s WHERE id = %s', ('paid', now, listing_id), commit=True)
+    is_postgres = use_postgres()
+    query = 'UPDATE listings SET status = %s, created_at = %s WHERE id = %s AND status != %s'
+    params = ('paid', now, listing_id, 'paid')
+    if not is_postgres:
+        query = query.replace("%s", "?")
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(query, params)
+        updated_rows = cur.rowcount
+        conn.commit()
+        return updated_rows > 0
+    finally:
+        cur.close()
+        conn.close()
+
 
 def get_listing_by_id(listing_id):
     return execute_query('SELECT * FROM listings WHERE id = %s', (listing_id,), fetchone=True)

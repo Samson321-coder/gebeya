@@ -2,6 +2,7 @@
 watermark.py — Adds a text watermark to house listing photos.
 """
 from io import BytesIO
+import math
 from PIL import Image, ImageDraw, ImageFont
 
 WATERMARK_TEXT = "@AkerayTekerayBot"
@@ -49,5 +50,37 @@ def apply_watermark(image_bytes: bytes) -> BytesIO:
 
     output = BytesIO()
     watermarked.save(output, format="JPEG", quality=92)
+    output.seek(0)
+    return output
+
+
+def create_collage(image_bytes_list, max_size=1600, margin=10):
+    """Create a single JPEG collage from multiple photos."""
+    if not image_bytes_list:
+        raise ValueError("No images provided for collage")
+    if len(image_bytes_list) == 1:
+        return BytesIO(image_bytes_list[0]) if isinstance(image_bytes_list[0], (bytes, bytearray)) else image_bytes_list[0]
+
+    images = [Image.open(BytesIO(img_bytes)).convert("RGB") for img_bytes in image_bytes_list]
+    count = len(images)
+    cols = int(math.ceil(math.sqrt(count)))
+    rows = int(math.ceil(count / cols))
+
+    cell_size = (max_size - margin * (cols + 1)) // cols
+    collage_width = cols * cell_size + margin * (cols + 1)
+    collage_height = rows * cell_size + margin * (rows + 1)
+
+    collage = Image.new("RGB", (collage_width, collage_height), color=(255, 255, 255))
+
+    for idx, img in enumerate(images):
+        img.thumbnail((cell_size, cell_size), Image.LANCZOS)
+        col = idx % cols
+        row = idx // cols
+        x = margin + col * (cell_size + margin) + (cell_size - img.width) // 2
+        y = margin + row * (cell_size + margin) + (cell_size - img.height) // 2
+        collage.paste(img, (x, y))
+
+    output = BytesIO()
+    collage.save(output, format="JPEG", quality=85)
     output.seek(0)
     return output

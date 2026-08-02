@@ -198,6 +198,21 @@ class EnhancementTests(unittest.TestCase):
 
         asyncio.run(run_test())
 
+    def test_approve_listing_is_idempotent_on_repeated_calls(self):
+        listing_id = database.add_listing(
+            100,
+            "Luxury Home",
+            "አዲስ አበባ - ቦሌ",
+            "5000",
+            None,
+            "0911000000",
+            listing_type="property",
+            property_purpose="sell",
+        )
+
+        self.assertTrue(database.approve_listing(listing_id))
+        self.assertFalse(database.approve_listing(listing_id))
+
     def test_approve_callback_skips_duplicate_owner_notification_for_paid_listing(self):
         async def run_test():
             query = SimpleNamespace(

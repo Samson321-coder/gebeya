@@ -1243,11 +1243,28 @@ async def post_listing_to_channel(context, listing, listing_type_val, property_p
         photo_ids = []
 
     if len(photo_ids) > 1:
-        media = [InputMediaPhoto(media=photo_ids[0], caption=text + view_text, parse_mode='HTML')]
-        for pid in photo_ids[1:]:
-            media.append(InputMediaPhoto(media=pid))
-        await context.bot.send_media_group(chat_id=channel_id, media=media)
-        return
+        try:
+            photos_bytes = []
+            for pid in photo_ids:
+                photo_file = await context.bot.get_file(pid)
+                photo_bytes = await photo_file.download_as_bytearray()
+                photos_bytes.append(bytes(photo_bytes))
+
+            collage = watermark.create_collage(photos_bytes)
+            channel_keyboard = [[InlineKeyboardButton("ወደ ቦቱ ይግቡ (View in Bot)", url=bot_link)]]
+            channel_reply_markup = InlineKeyboardMarkup(channel_keyboard)
+            await context.bot.send_photo(
+                chat_id=channel_id,
+                photo=collage,
+                caption=text + view_text,
+                parse_mode='HTML',
+                reply_markup=channel_reply_markup,
+            )
+            return
+        except Exception as e:
+            logger.error(f"Failed to create collage for channel post: {e}")
+            # Fallback to sending the first photo only if collage fails
+            photo_ids = photo_ids[:1]
 
     channel_keyboard = [[InlineKeyboardButton("ወደ ቦቱ ይግቡ (View in Bot)", url=bot_link)]]
     channel_reply_markup = InlineKeyboardMarkup(channel_keyboard)
