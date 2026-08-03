@@ -24,7 +24,7 @@ class EnhancementTests(unittest.TestCase):
 
     def test_strings_categories(self):
         self.assertEqual(strings.CATEGORY_OTHER, "📦 ሌላ")
-        self.assertEqual(strings.SERVICE_CATEGORY_OTHER, "📦 ሌሎች አገልግሎቶች")
+        self.assertEqual(strings.SERVICE_CATEGORY_OTHER, "📦 ሌላ")
 
     def test_property_purpose_extraction_supports_fresh_and_migrated_schemas(self):
         # Fresh schema row format (purpose at index 7):
@@ -226,15 +226,17 @@ class EnhancementTests(unittest.TestCase):
                 "property",
             )
 
-            with patch.dict(os.environ, {"MINI_APP_URL": "https://example.com/gallery"}, clear=False):
+            with patch.dict(os.environ, {"MINI_APP_URL": ""}, clear=False):
                 await main.post_listing_to_channel(context, listing, "property", "rent", channel_id="channel")
 
-            bot.send_media_group.assert_awaited_once()
-            bot.send_photo.assert_not_awaited()
+            bot.send_photo.assert_awaited_once()
+            bot.send_media_group.assert_not_awaited()
             bot.send_message.assert_not_awaited()
-            media_payload = bot.send_media_group.await_args.kwargs["media"]
-            self.assertEqual(len(media_payload), 2)
-            self.assertIn("📋 መግለጫ፦", media_payload[0].caption)
+            sent_caption = bot.send_photo.await_args.kwargs["caption"]
+            self.assertIn("📸 +1 ተጨማሪ ፎቶዎች", sent_caption)
+            reply_markup = bot.send_photo.await_args.kwargs["reply_markup"]
+            buttons = reply_markup.inline_keyboard
+            self.assertEqual(buttons[0][0].url, "https://t.me/demo_bot?start=view_1")
 
         asyncio.run(run_test())
 

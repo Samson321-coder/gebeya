@@ -59,7 +59,7 @@ SERVICE_CATEGORY_HOUSE = "🔧 ቤት ነክ"
 SERVICE_CATEGORY_VEHICLE = "🚗 ተሽከርካሪ ነክ"
 SERVICE_CATEGORY_ELECTRONICS = "📱 ኤሌክትሮንክስ ነክ"
 SERVICE_CATEGORY_COSMETICS = "👗 ፋሽን/ዉበት ነክ"
-SERVICE_CATEGORY_OTHER = "📦 ሌሎች አገልግሎቶች"
+SERVICE_CATEGORY_OTHER = "📦 ሌላ"
 
 OWNER_ASK_TYPE = 'ከሚከተሉት አማራጮች አንዱን ይምረጡ'
 LISTING_SERVICE = "አገልግሎት ሰጪ"

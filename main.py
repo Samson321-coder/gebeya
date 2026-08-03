@@ -316,6 +316,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         database.add_user(user.id, user.username, role='admin')
         await update.message.reply_text(strings.ADMIN_TITLE)
 
+    # Check for deep-linking arguments (e.g., /start view_123)
+    if context.args and context.args[0].startswith("view_"):
+        try:
+            view_id = int(context.args[0].split("_")[1])
+            target_listing = database.get_listing_by_id(view_id)
+            if target_listing:
+                context.user_data['current_listings'] = [target_listing]
+                context.user_data['is_for_owner'] = False
+                await send_listing_page(update, context, 0)
+                return CHOOSING_ROLE
+        except Exception as e:
+            logger.error(f"Error handling deep link parameter: {e}")
+
     # Subscription check (skip for admins)
     if user.id not in ADMIN_IDS:
         subscribed = await is_subscribed(context.bot, user.id)
@@ -1264,18 +1277,32 @@ async def post_listing_to_channel(context, listing, listing_type_val, property_p
     else:
         photo_ids = []
 
-    keyboard_buttons = [[InlineKeyboardButton("ወደ ቦቱ ይግቡ", url=bot_link)]]
-    channel_reply_markup = InlineKeyboardMarkup(keyboard_buttons)
+    deep_link_url = f"https://t.me/{bot_username}?start=view_{listing_id}" if listing_id else bot_link
 
     try:
-        if len(photo_ids) > 1:
-            media = [InputMediaPhoto(media=photo_ids[0], caption=text + view_text, parse_mode='HTML')]
-            for pid in photo_ids[1:]:
-                media.append(InputMediaPhoto(media=pid))
-            await context.bot.send_media_group(chat_id=channel_id, media=media)
-        elif len(photo_ids) == 1:
-            await context.bot.send_photo(chat_id=channel_id, photo=photo_ids[0], caption=text + view_text, parse_mode='HTML', reply_markup=channel_reply_markup)
+        if photo_ids:
+            extra_count = len(photo_ids) - 1
+            if extra_count > 0:
+                caption = text + view_text + f"\n\n📸 +{extra_count} ተጨማሪ ፎቶዎች"
+                keyboard_buttons = [
+                    [InlineKeyboardButton(f"📸 ሁሉንም ፎቶዎች ይመልከቱ (+{extra_count})", url=deep_link_url)],
+                    [InlineKeyboardButton("ወደ ቦቱ ይግቡ", url=bot_link)]
+                ]
+            else:
+                caption = text + view_text
+                keyboard_buttons = [[InlineKeyboardButton("ወደ ቦቱ ይግቡ", url=bot_link)]]
+
+            channel_reply_markup = InlineKeyboardMarkup(keyboard_buttons)
+            await context.bot.send_photo(
+                chat_id=channel_id,
+                photo=photo_ids[0],
+                caption=caption,
+                parse_mode='HTML',
+                reply_markup=channel_reply_markup,
+            )
         else:
+            keyboard_buttons = [[InlineKeyboardButton("ወደ ቦቱ ይግቡ", url=bot_link)]]
+            channel_reply_markup = InlineKeyboardMarkup(keyboard_buttons)
             await context.bot.send_message(chat_id=channel_id, text=text + view_text, parse_mode='HTML', reply_markup=channel_reply_markup)
 
         if listing_id is not None:

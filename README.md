@@ -84,7 +84,7 @@ DATABASE_URL=postgresql://user:password@host/dbname?sslmode=require
 - **AI**: Google Gemini (gemini-2.0-flash-exp)
 - **Image Processing**: Pillow (Watermarking)
 
-source .venv/Scripts/activate
+source .venv/Scripts/activate  
 
 Multiple Notifications
 
