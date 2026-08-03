@@ -159,7 +159,8 @@ def init_db():
         fee_amount REAL DEFAULT 0,
         transaction_id TEXT,
         last_checked_at TEXT,
-        listing_type TEXT DEFAULT 'property'
+        listing_type TEXT DEFAULT 'property',
+        channel_notified_at TEXT
     )
     ''', commit=True)
     
@@ -186,6 +187,7 @@ def init_db():
         execute_query("ALTER TABLE listings ADD COLUMN IF NOT EXISTS last_checked_at TEXT", commit=True)
         execute_query("ALTER TABLE listings ADD COLUMN IF NOT EXISTS listing_type TEXT DEFAULT 'property'", commit=True)
         execute_query("ALTER TABLE listings ADD COLUMN IF NOT EXISTS property_purpose TEXT", commit=True)
+        execute_query("ALTER TABLE listings ADD COLUMN IF NOT EXISTS channel_notified_at TEXT", commit=True)
         # Alerts migration
         execute_query("ALTER TABLE alerts ADD COLUMN IF NOT EXISTS description TEXT", commit=True)
     else:
@@ -207,6 +209,8 @@ def init_db():
                 cursor.execute("ALTER TABLE listings ADD COLUMN listing_type TEXT DEFAULT 'property'")
             if 'property_purpose' not in columns:
                 cursor.execute("ALTER TABLE listings ADD COLUMN property_purpose TEXT")
+            if 'channel_notified_at' not in columns:
+                cursor.execute("ALTER TABLE listings ADD COLUMN channel_notified_at TEXT")
             # Alerts migration
             cursor.execute("PRAGMA table_info(alerts)")
             alert_columns = [col[1] for col in cursor.fetchall()]
@@ -282,6 +286,67 @@ def approve_listing(listing_id):
         updated_rows = cur.rowcount
         conn.commit()
         return updated_rows > 0
+    finally:
+        cur.close()
+        conn.close()
+
+
+def is_listing_channel_notified(listing_id):
+    result = execute_query('SELECT channel_notified_at FROM listings WHERE id = %s', (listing_id,), fetchone=True)
+    return bool(result and result[0])
+
+
+def reserve_listing_channel_notification(listing_id):
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    is_postgres = use_postgres()
+    query = 'UPDATE listings SET channel_notified_at = %s WHERE id = %s AND channel_notified_at IS NULL'
+    params = (now, listing_id)
+    if not is_postgres:
+        query = query.replace("%s", "?")
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(query, params)
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        cur.close()
+        conn.close()
+
+
+def clear_listing_channel_notification(listing_id):
+    is_postgres = use_postgres()
+    query = 'UPDATE listings SET channel_notified_at = NULL WHERE id = %s'
+    params = (listing_id,)
+    if not is_postgres:
+        query = query.replace("%s", "?")
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(query, params)
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        cur.close()
+        conn.close()
+
+
+def mark_listing_channel_notified(listing_id):
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    is_postgres = use_postgres()
+    query = 'UPDATE listings SET channel_notified_at = %s WHERE id = %s'
+    params = (now, listing_id)
+    if not is_postgres:
+        query = query.replace("%s", "?")
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(query, params)
+        conn.commit()
+        return cur.rowcount > 0
     finally:
         cur.close()
         conn.close()

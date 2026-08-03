@@ -2,8 +2,9 @@ import os
 import logging
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib.parse import quote, urlparse
 from dotenv import load_dotenv
-from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.error import BadRequest
 from telegram.ext import (
     Application,
@@ -728,7 +729,7 @@ async def owner_submit_txid(update: Update, context: ContextTypes.DEFAULT_TYPE):
     listing_id = context.user_data.get("listing_id")
     if not listing_id:
         await update.message.reply_text(
-            "❌ የክፍያ ማረጋገጫ ማስተላለፍ አልተቻለም። እባክዎ እንደገና ይጀምሩ /start",
+            "❌ የክፍያ ማረጋገጫ ማስተላለፍ አልተቻለም። እንደገና ይጀምሩ /start",
             reply_markup=get_main_keyboard(),
             parse_mode='HTML'
         )
@@ -917,19 +918,26 @@ async def seeker_browse_city(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return SEEKER_LOOKING_FOR_DESC
 
     if context.user_data.get("in_looking_for_search"):
-        # Ask for date filter first
-        context.user_data["lf_search_city"] = city
-        context.user_data["lf_search_neighborhood"] = neighborhood
-        keyboard = [
-            [strings.FILTER_24_HOURS],
-            [strings.FILTER_7_DAYS],
-            [strings.FILTER_ALL_TIME],
-        ]
-        await update.message.reply_text(
-            strings.OWNER_ASK_DATE_FILTER,
-            reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+        listings = database.get_listings_by_city(
+            city,
+            listing_type='looking_for',
+            property_purpose=context.user_data.get("seeker_property_purpose"),
+            category=context.user_data.get("seeker_category"),
         )
-        return OWNER_LOOKING_FOR_DATE
+        if neighborhood and neighborhood != "ሁሉም":
+            listings = [
+                listing for listing in listings
+                if neighborhood in (listing[3] or "")
+            ]
+
+        if not listings:
+            await update.message.reply_text(strings.SEEKER_NO_MATCH)
+            return SEEKER_MENU
+
+        context.user_data['current_listings'] = listings
+        context.user_data['is_for_owner'] = False
+        await send_listing_page(update, context, 0)
+        return SEEKER_MENU
 
     listings = database.get_listings_by_city(
         city,
@@ -985,50 +993,6 @@ async def execute_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ─── "Looking For" (Seeker post a request) ────────────────────────────────────
-
-async def owner_looking_for_date_filter(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle the date filter selection for Looking For listings."""
-    from datetime import datetime, timedelta
-    text = update.message.text
-    city = context.user_data.get("lf_search_city", "")
-    neighborhood = context.user_data.get("lf_search_neighborhood", "")
-
-    listings = database.get_listings_by_city(
-        city,
-        listing_type='looking_for',
-        property_purpose=context.user_data.get("seeker_property_purpose"),
-        category=context.user_data.get("seeker_category"),
-    )
-    if neighborhood and neighborhood != "ሁሉም":
-        listings = [lst for lst in listings if neighborhood in (lst[3] or "")]
-
-    if text == strings.FILTER_24_HOURS:
-        cutoff = datetime.now() - timedelta(days=1)
-    elif text == strings.FILTER_7_DAYS:
-        cutoff = datetime.now() - timedelta(days=7)
-    else:
-        cutoff = None
-
-    if cutoff:
-        filtered = []
-        for lst in listings:
-            try:
-                created = datetime.strptime(lst[7], "%Y-%m-%d %H:%M:%S")
-                if created >= cutoff:
-                    filtered.append(lst)
-            except Exception:
-                filtered.append(lst)
-        listings = filtered
-
-    if not listings:
-        await update.message.reply_text(strings.SEEKER_NO_MATCH)
-        return OWNER_MENU
-
-    context.user_data['current_listings'] = listings
-    context.user_data['is_for_owner'] = False
-    await send_listing_page(update, context, 0)
-    return OWNER_MENU
-
 
 async def seeker_looking_for_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Seeker clicked 'Looking For' — skip purpose if already known."""
@@ -1152,7 +1116,7 @@ async def seeker_looking_for_txid(update: Update, context: ContextTypes.DEFAULT_
 
     listing_id = context.user_data.get("looking_for_listing_id")
     if not listing_id:
-        await update.message.reply_text("❌ ስህተት ተፈጥሯል። እባክዎን እንደገና ይሞክሩ /start")
+        await update.message.reply_text("❌ ስህተት ተፈጥሯል። እንደገና ይሞክሩ /start")
         return CHOOSING_ROLE
 
     database.update_listing_txid(listing_id, txid)
@@ -1213,13 +1177,70 @@ async def seeker_looking_for_txid(update: Update, context: ContextTypes.DEFAULT_
 
 # ─── Listing Display ──────────────────────────────────────────────────────────
 
-async def post_listing_to_channel(context, listing, listing_type_val, property_purpose_val, channel_id=None):
-    """Post a normal listing to the channel once, without sending duplicate follow-up messages."""
-    from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
+async def _build_gallery_web_app_url(context, photo_ids):
+    """Create a Telegram Mini App URL that opens a swipeable gallery for the supplied photos."""
+    if not photo_ids:
+        return None
 
+    mini_app_url = (os.getenv("MINI_APP_URL") or "").strip()
+    if not mini_app_url:
+        return None
+
+    photo_urls = []
+    for photo_id in photo_ids:
+        try:
+            file = await context.bot.get_file(photo_id)
+            file_path = getattr(file, "file_path", None)
+            if file_path:
+                photo_urls.append(f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}")
+        except Exception as e:
+            logger.warning(f"Failed to resolve Telegram photo URL for {photo_id}: {e}")
+
+    if not photo_urls:
+        return None
+
+    joined_photos = "|".join(photo_urls)
+    separator = "&" if "?" in mini_app_url else "?"
+    return f"{mini_app_url}{separator}photos={quote(joined_photos)}"
+
+
+def _is_public_gallery_url(url: str | None) -> bool:
+    """Return True when a gallery URL is reachable by Telegram inline keyboard buttons."""
+    if not url:
+        return False
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return False
+
+    if parsed.scheme not in ("http", "https"):
+        return False
+
+    host = (parsed.hostname or "").lower()
+    return host not in {"localhost", "127.0.0.1", "0.0.0.0"}
+
+
+async def post_listing_to_channel(context, listing, listing_type_val, property_purpose_val, channel_id=None):
+    """Post a single main listing to the channel with a gallery button for additional photos."""
     channel_id = channel_id or CHANNEL_ID
     if not channel_id:
         return
+
+    listing_id = None
+    if isinstance(listing, dict):
+        listing_id = listing.get("id")
+    elif isinstance(listing, (list, tuple)) and listing:
+        listing_id = listing[0]
+
+    if listing_id is not None and database.is_listing_channel_notified(listing_id):
+        logger.info(f"Skipping duplicate channel post for listing {listing_id}")
+        return
+
+    if listing_id is not None:
+        persisted_listing = database.get_listing_by_id(listing_id)
+        if persisted_listing is not None and not database.reserve_listing_channel_notification(listing_id):
+            logger.info(f"Another channel post is already being processed for listing {listing_id}")
+            return
 
     listing_type_am = get_listing_type_display_name(listing_type_val, property_purpose_val, listing[2] if len(listing) > 2 else None)
     listing_type_title = get_listing_title(listing_type_val, property_purpose_val, listing[2] if len(listing) > 2 else None)
@@ -1243,37 +1264,27 @@ async def post_listing_to_channel(context, listing, listing_type_val, property_p
     else:
         photo_ids = []
 
-    if len(photo_ids) > 1:
-        try:
-            photos_bytes = []
-            for pid in photo_ids:
-                photo_file = await context.bot.get_file(pid)
-                photo_bytes = await photo_file.download_as_bytearray()
-                photos_bytes.append(bytes(photo_bytes))
+    keyboard_buttons = [[InlineKeyboardButton("ወደ ቦቱ ይግቡ", url=bot_link)]]
+    channel_reply_markup = InlineKeyboardMarkup(keyboard_buttons)
 
-            collage = watermark.create_collage(photos_bytes)
-            channel_keyboard = [[InlineKeyboardButton("ወደ ቦቱ ይግቡ (View in Bot)", url=bot_link)]]
-            channel_reply_markup = InlineKeyboardMarkup(channel_keyboard)
-            await context.bot.send_photo(
-                chat_id=channel_id,
-                photo=collage,
-                caption=text + view_text,
-                parse_mode='HTML',
-                reply_markup=channel_reply_markup,
-            )
-            return
-        except Exception as e:
-            logger.error(f"Failed to create collage for channel post: {e}")
-            # Fallback to sending the first photo only if collage fails
-            photo_ids = photo_ids[:1]
+    try:
+        if len(photo_ids) > 1:
+            media = [InputMediaPhoto(media=photo_ids[0], caption=text + view_text, parse_mode='HTML')]
+            for pid in photo_ids[1:]:
+                media.append(InputMediaPhoto(media=pid))
+            await context.bot.send_media_group(chat_id=channel_id, media=media)
+        elif len(photo_ids) == 1:
+            await context.bot.send_photo(chat_id=channel_id, photo=photo_ids[0], caption=text + view_text, parse_mode='HTML', reply_markup=channel_reply_markup)
+        else:
+            await context.bot.send_message(chat_id=channel_id, text=text + view_text, parse_mode='HTML', reply_markup=channel_reply_markup)
 
-    channel_keyboard = [[InlineKeyboardButton("ወደ ቦቱ ይግቡ (View in Bot)", url=bot_link)]]
-    channel_reply_markup = InlineKeyboardMarkup(channel_keyboard)
-
-    if len(photo_ids) == 1:
-        await context.bot.send_photo(chat_id=channel_id, photo=photo_ids[0], caption=text + view_text, parse_mode='HTML', reply_markup=channel_reply_markup)
-    else:
-        await context.bot.send_message(chat_id=channel_id, text=text + view_text, parse_mode='HTML', reply_markup=channel_reply_markup)
+        if listing_id is not None:
+            database.mark_listing_channel_notified(listing_id)
+    except Exception as e:
+        if listing_id is not None:
+            database.clear_listing_channel_notification(listing_id)
+        logger.exception(f"Failed to post listing {listing[0]} to channel {channel_id}: {e}")
+        raise
 
 
 async def send_listing_page(update: Update, context: ContextTypes.DEFAULT_TYPE, current_idx: int):
@@ -1550,10 +1561,21 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                         bot_username = (await context.bot.get_me()).username
                         bot_link = f"https://t.me/{bot_username}"
-                        lf_keyboard = [[InlineKeyboardButton("ወደ ቦቱ ይግቡ (View in Bot)", url=bot_link)]]
+                        lf_keyboard = [[InlineKeyboardButton("ወደ ቦቱ ይግቡ", url=bot_link)]]
                         lf_reply_markup = InlineKeyboardMarkup(lf_keyboard)
 
-                        await context.bot.send_message(chat_id=CHANNEL_ID, text=post_text, parse_mode='HTML', reply_markup=lf_reply_markup)
+                        if listing[0] is not None and not database.reserve_listing_channel_notification(listing[0]):
+                            logger.info(f"Skipping duplicate looking-for channel post for listing {listing[0]}")
+                            return
+
+                        try:
+                            await context.bot.send_message(chat_id=CHANNEL_ID, text=post_text, parse_mode='HTML', reply_markup=lf_reply_markup)
+                            if listing[0] is not None:
+                                database.mark_listing_channel_notified(listing[0])
+                        except Exception as lf_error:
+                            if listing[0] is not None:
+                                database.clear_listing_channel_notification(listing[0])
+                            raise lf_error
                     except Exception as e:
                         logger.error(f"Failed to post looking_for to channel: {e}")
             else:
@@ -1805,6 +1827,9 @@ def main():
         application.add_handler(CallbackQueryHandler(debug_all), group=-1)
 
     persistence_path = os.getenv("PERSISTENCE_PATH", "bot_data.pickle")
+    persistence_dir = os.path.dirname(os.path.abspath(persistence_path))
+    if persistence_dir:
+        os.makedirs(persistence_dir, exist_ok=True)
     persistence = PicklePersistence(filepath=persistence_path)
 
     application = (
@@ -1866,9 +1891,6 @@ def main():
             # Looking For flow
             SEEKER_LOOKING_FOR_PURPOSE: [
                 MessageHandler(filters.ALL, seeker_looking_for_start)
-            ],
-            OWNER_LOOKING_FOR_DATE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.Text(strings.CANCEL), owner_looking_for_date_filter)
             ],
             SEEKER_LOOKING_FOR_DESC: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.Text(strings.CANCEL), seeker_looking_for_description)

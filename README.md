@@ -86,3 +86,5 @@ DATABASE_URL=postgresql://user:password@host/dbname?sslmode=require
 
 source .venv/Scripts/activate
 
+Multiple Notifications
+

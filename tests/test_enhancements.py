@@ -165,13 +165,48 @@ class EnhancementTests(unittest.TestCase):
 
         asyncio.run(run_test())
 
-    def test_post_listing_to_channel_does_not_send_duplicate_text_for_multi_photo(self):
+    def test_post_listing_to_channel_posts_once_per_listing(self):
+        async def run_test():
+            listing_id = database.add_listing(
+                100,
+                "Luxury Home",
+                "አዲስ አበባ - ቦሌ",
+                "5000",
+                None,
+                "0911000000",
+                listing_type="property",
+                property_purpose="sell",
+            )
+            listing = database.get_listing_by_id(listing_id)
+            bot = SimpleNamespace(
+                send_media_group=AsyncMock(return_value=[SimpleNamespace(message_id=1)]),
+                send_photo=AsyncMock(),
+                send_message=AsyncMock(),
+                get_me=AsyncMock(return_value=SimpleNamespace(username="demo_bot")),
+                get_file=AsyncMock(),
+            )
+            context = SimpleNamespace(bot=bot)
+
+            with patch.dict(os.environ, {"MINI_APP_URL": ""}, clear=False):
+                await main.post_listing_to_channel(context, listing, "property", "sell", channel_id="channel")
+                await main.post_listing_to_channel(context, listing, "property", "sell", channel_id="channel")
+
+            bot.send_message.assert_awaited_once()
+            self.assertTrue(database.is_listing_channel_notified(listing_id))
+
+        asyncio.run(run_test())
+
+    def test_post_listing_to_channel_posts_once_for_multi_photo_listing(self):
         async def run_test():
             bot = SimpleNamespace(
                 send_media_group=AsyncMock(return_value=[SimpleNamespace(message_id=1)]),
                 send_photo=AsyncMock(),
                 send_message=AsyncMock(),
                 get_me=AsyncMock(return_value=SimpleNamespace(username="demo_bot")),
+                get_file=AsyncMock(side_effect=[
+                    SimpleNamespace(file_path="photos/1.jpg"),
+                    SimpleNamespace(file_path="photos/2.jpg"),
+                ]),
             )
             context = SimpleNamespace(bot=bot)
             listing = (
@@ -191,10 +226,61 @@ class EnhancementTests(unittest.TestCase):
                 "property",
             )
 
-            await main.post_listing_to_channel(context, listing, "property", "rent", channel_id="channel")
+            with patch.dict(os.environ, {"MINI_APP_URL": "https://example.com/gallery"}, clear=False):
+                await main.post_listing_to_channel(context, listing, "property", "rent", channel_id="channel")
 
             bot.send_media_group.assert_awaited_once()
+            bot.send_photo.assert_not_awaited()
             bot.send_message.assert_not_awaited()
+            media_payload = bot.send_media_group.await_args.kwargs["media"]
+            self.assertEqual(len(media_payload), 2)
+            self.assertIn("📋 መግለጫ፦", media_payload[0].caption)
+
+        asyncio.run(run_test())
+
+    def test_post_listing_to_channel_is_race_safe_for_concurrent_calls(self):
+        async def run_test():
+            listing_id = database.add_listing(
+                100,
+                "Luxury Home",
+                "አዲስ አበባ - ቦሌ",
+                "5000",
+                None,
+                "0911000000",
+                listing_type="property",
+                property_purpose="sell",
+            )
+            listing = database.get_listing_by_id(listing_id)
+
+            started = asyncio.Event()
+            release = asyncio.Event()
+            send_calls = 0
+
+            async def delayed_send_message(*args, **kwargs):
+                nonlocal send_calls
+                send_calls += 1
+                started.set()
+                await release.wait()
+                return None
+
+            bot = SimpleNamespace(
+                send_media_group=AsyncMock(),
+                send_photo=AsyncMock(),
+                send_message=AsyncMock(side_effect=delayed_send_message),
+                get_me=AsyncMock(return_value=SimpleNamespace(username="demo_bot")),
+                get_file=AsyncMock(),
+            )
+            context = SimpleNamespace(bot=bot)
+
+            with patch.dict(os.environ, {"MINI_APP_URL": ""}, clear=False):
+                task1 = asyncio.create_task(main.post_listing_to_channel(context, listing, "property", "sell", channel_id="channel"))
+                await started.wait()
+                task2 = asyncio.create_task(main.post_listing_to_channel(context, listing, "property", "sell", channel_id="channel"))
+                release.set()
+                await asyncio.gather(task1, task2)
+
+            self.assertEqual(send_calls, 1)
+            self.assertTrue(database.is_listing_channel_notified(listing_id))
 
         asyncio.run(run_test())
 
